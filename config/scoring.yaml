@@ -1,0 +1,38 @@
+methodology_version: "2.0.0"
+score_kind: "editorial_descriptive"
+
+base:
+  pillar_weights: { value: 0.3333, quality: 0.3333, momentum: 0.3334 }
+  peer_frame: "sector"          # GICS-11
+  winsorize: { lower: 0.01, upper: 0.99 }
+  quality_margin: "operating"   # not "net"
+  momentum_secondary_global: true
+
+social_tilt:
+  tilt_max: 10
+  beta: 1.5                     # placeholder
+  shape: "tanh"
+  symmetric: true               # asymmetric = v1.1
+  dampener_neg_share_pivot: 0.5 # placeholder
+
+shrinkage:
+  k: 10                         # placeholder
+  prior: 50                     # sector-neutral = v1.1
+  display_badges: { sparse_below: 5, ok_at: 15 }
+
+social_pipeline:
+  sources: [reddit, stocktwits]
+  include_wsb: true
+  source_cap_per_ticker_day: 0.50
+  mention_transform: "log1p_then_universe_share"
+  reddit_comments: false        # v1.1
+  sentiment_engagement_weight: "1+log1p(upvotes)"
+
+universe:
+  scope: ["US", "ADR"]
+  min_market_cap_usd: 1.0e9     # placeholder
+  min_adv_usd_20d: 5.0e6        # placeholder
+  min_names_per_sector: 30
+  target_size: [400, 500]
+
+placeholder: true               # entire set calibrated on synthetic data

@@ -1,0 +1,12 @@
+{
+  "universe_id": "fixture-gics11-v1",
+  "methodology_version": "2.0.0",
+  "scope": ["US", "ADR"],
+  "min_market_cap_usd": 1000000000,
+  "min_adv_usd_20d": 5000000,
+  "min_names_per_sector": 30,
+  "target_size": [400, 500],
+  "seed_sets": ["SP500", "NDX100", "LIQUID_ADR"],
+  "peer_frame": "GICS-11",
+  "placeholder": true
+}
