@@ -8,11 +8,13 @@ from rich.console import Console
 from rich.table import Table
 
 from standing.config import load_scoring_config
+from standing.logging_config import configure_logging, get_logger
 from standing.pipeline.report import render_html_report
 from standing.pipeline.snapshot import persist_snapshot, run_snapshot
 from standing.providers import FixtureMarketProvider, FixtureSocialProvider
 
 console = Console()
+log = get_logger("cli")
 
 
 def _parse_date(value: str | None) -> date:
@@ -25,7 +27,9 @@ def cmd_score(args: argparse.Namespace) -> int:
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     if not cfg.placeholder:
         console.print("[yellow]Warning:[/yellow] placeholder is false — verify empirical freeze.")
+        log.warning("placeholder=false — verify empirical freeze before production use")
     as_of = _parse_date(args.as_of)
+    log.info("CLI score as_of=%s out=%s", as_of.isoformat(), args.out)
     snap = run_snapshot(
         as_of=as_of,
         market=FixtureMarketProvider(),
@@ -52,6 +56,7 @@ def cmd_score(args: argparse.Namespace) -> int:
 def cmd_table(args: argparse.Namespace) -> int:
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     as_of = _parse_date(args.as_of)
+    log.info("CLI table as_of=%s top=%s", as_of.isoformat(), args.top)
     snap = run_snapshot(
         as_of=as_of,
         market=FixtureMarketProvider(),
@@ -107,6 +112,7 @@ def cmd_heat(args: argparse.Namespace) -> int:
     """Attention board — primary heat surface, separate from composite."""
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     as_of = _parse_date(args.as_of)
+    log.info("CLI heat as_of=%s top=%s", as_of.isoformat(), args.top)
     snap = run_snapshot(
         as_of=as_of,
         market=FixtureMarketProvider(),
@@ -138,6 +144,7 @@ def cmd_heat(args: argparse.Namespace) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     as_of = _parse_date(args.as_of)
+    log.info("CLI report as_of=%s out=%s", as_of.isoformat(), args.out)
     snap = run_snapshot(
         as_of=as_of,
         market=FixtureMarketProvider(),
@@ -148,6 +155,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     path = render_html_report(snap, out)
     persist_snapshot(snap, out.parent / "snapshots")
     console.print(f"Wrote HTML report {path}")
+    log.info("Wrote HTML report path=%s", path)
     return 0
 
 
@@ -164,6 +172,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
         f"[bold]Standing[/bold] web desk → http://{args.host}:{args.port}  "
         "(editorial_descriptive · not investment advice)"
     )
+    log.info(
+        "Starting web desk host=%s port=%s log_level=%s",
+        args.host,
+        args.port,
+        args.log_level,
+    )
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
     return 0
 
@@ -174,6 +188,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Descriptive V/Q/M standing screener with bounded social attention tilt",
     )
     p.add_argument("--config", default=None, help="Path to scoring.yaml")
+    p.add_argument(
+        "--log-level",
+        default=None,
+        help="standing logger level (default: INFO or STANDING_LOG_LEVEL)",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def add_common(sp: argparse.ArgumentParser) -> None:
@@ -203,7 +222,12 @@ def build_parser() -> argparse.ArgumentParser:
     w = sub.add_parser("serve", help="Run the Standing web interface")
     w.add_argument("--host", default="127.0.0.1")
     w.add_argument("--port", type=int, default=8000)
-    w.add_argument("--log-level", default="info")
+    w.add_argument(
+        "--log-level",
+        default="info",
+        dest="serve_log_level",
+        help="uvicorn access/log level (default: info)",
+    )
     w.set_defaults(func=cmd_serve)
 
     return p
@@ -212,7 +236,21 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    # Prefer serve-specific uvicorn level only for uvicorn; standing logger uses --log-level / env.
+    standing_level = getattr(args, "log_level", None)
+    if args.cmd == "serve":
+        args.log_level = getattr(args, "serve_log_level", "info")
+        if standing_level is None:
+            standing_level = args.log_level
+    configure_logging(standing_level)
+    log.info("Command start cmd=%s", args.cmd)
+    try:
+        code = args.func(args)
+    except Exception:
+        log.exception("Command failed cmd=%s", args.cmd)
+        raise
+    log.info("Command finished cmd=%s exit=%s", args.cmd, code)
+    return code
 
 
 if __name__ == "__main__":

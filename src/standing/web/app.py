@@ -2,21 +2,25 @@ from __future__ import annotations
 
 import csv
 import io
+import time
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from standing.config import load_scoring_config
+from standing.logging_config import configure_logging, get_logger
 from standing.pipeline.snapshot import StandingSnapshot, run_snapshot
 from standing.providers import FixtureMarketProvider, FixtureSocialProvider
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+log = get_logger("web")
 
 PresetName = Literal[
     "balanced",
@@ -46,6 +50,14 @@ CSV_COLUMNS = [
     "social_badge",
     "sector_low_confidence",
 ]
+
+CLIENT_LEVELS = {
+    "debug": log.debug,
+    "info": log.info,
+    "warn": log.warning,
+    "warning": log.warning,
+    "error": log.error,
+}
 
 
 class StandingMeta(BaseModel):
@@ -109,6 +121,18 @@ class MethodologyResponse(BaseModel):
     source_posture: str
 
 
+class ClientLogEntry(BaseModel):
+    level: Literal["debug", "info", "warn", "warning", "error"] = "info"
+    message: str = Field(min_length=1, max_length=2000)
+    context: dict[str, Any] | None = None
+    ts: str | None = None
+    page: str | None = Field(default=None, max_length=200)
+
+
+class ClientLogBatch(BaseModel):
+    entries: list[ClientLogEntry] = Field(default_factory=list, max_length=50)
+
+
 def _parse_as_of(value: str | None) -> date:
     if not value:
         return date.today()
@@ -120,6 +144,7 @@ def _parse_as_of(value: str | None) -> date:
 
 @lru_cache(maxsize=32)
 def _cached_snapshot(as_of_iso: str, history_days: int) -> dict[str, Any]:
+    log.info("Snapshot cache miss as_of=%s history_days=%s", as_of_iso, history_days)
     as_of = date.fromisoformat(as_of_iso)
     cfg = load_scoring_config()
     snap = run_snapshot(
@@ -245,7 +270,23 @@ def _methodology_payload() -> dict[str, Any]:
     }
 
 
+def _ingest_client_logs(entries: list[ClientLogEntry], *, client: str | None) -> int:
+    for entry in entries:
+        emit = CLIENT_LEVELS.get(entry.level, log.info)
+        ctx = entry.context or {}
+        emit(
+            "ui page=%s client=%s msg=%s ctx=%s ts=%s",
+            entry.page or "unknown",
+            client or "-",
+            entry.message,
+            ctx,
+            entry.ts or "-",
+        )
+    return len(entries)
+
+
 def create_app() -> FastAPI:
+    configure_logging()
     app = FastAPI(
         title="Standing",
         description=(
@@ -254,6 +295,41 @@ def create_app() -> FastAPI:
         ),
         version="0.1.0",
     )
+
+    @app.middleware("http")
+    async def request_logging(request: Request, call_next):  # type: ignore[no-untyped-def]
+        started = time.perf_counter()
+        path = request.url.path
+        # Keep static noise quieter at debug
+        quiet = path.startswith("/static/")
+        if not quiet:
+            log.info(
+                "request start method=%s path=%s query=%s",
+                request.method,
+                path,
+                str(request.url.query) or "-",
+            )
+        try:
+            response = await call_next(request)
+        except Exception:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            log.exception(
+                "request failed method=%s path=%s elapsed_ms=%.1f",
+                request.method,
+                path,
+                elapsed_ms,
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        level = log.debug if quiet else log.info
+        level(
+            "request done method=%s path=%s status=%s elapsed_ms=%.1f",
+            request.method,
+            path,
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -266,6 +342,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/methodology", response_model=MethodologyResponse)
     def methodology() -> dict[str, Any]:
+        log.debug("Serving methodology payload")
         return _methodology_payload()
 
     @app.get("/api/snapshot", response_model=SnapshotResponse)
@@ -280,7 +357,7 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         day = _parse_as_of(as_of)
         payload = _cached_snapshot(day.isoformat(), history_days)
-        standings, heat, _key = _apply_filters(
+        standings, heat, key = _apply_filters(
             list(payload["standings"]),
             q=q,
             sector=sector,
@@ -290,6 +367,15 @@ def create_app() -> FastAPI:
         if limit is not None:
             standings = standings[:limit]
             heat = heat[:limit]
+        log.info(
+            "snapshot response as_of=%s preset=%s sort_key=%s sector=%s q=%s n=%s",
+            day.isoformat(),
+            preset,
+            key,
+            sector or "-",
+            q or "-",
+            len(standings),
+        )
         return {"meta": payload["meta"], "standings": standings, "heat": heat}
 
     @app.get("/api/snapshot.csv")
@@ -321,6 +407,13 @@ def create_app() -> FastAPI:
             writer.writerow({col: row.get(col) for col in CSV_COLUMNS})
         buf.seek(0)
         filename = f"standing_{day.isoformat()}_{preset}.csv"
+        log.info(
+            "csv export as_of=%s preset=%s rows=%s filename=%s",
+            day.isoformat(),
+            preset,
+            len(standings),
+            filename,
+        )
         return StreamingResponse(
             iter([buf.getvalue()]),
             media_type="text/csv",
@@ -340,8 +433,16 @@ def create_app() -> FastAPI:
             None,
         )
         if match is None:
+            log.warning("ticker not found ticker=%s as_of=%s", ticker.upper(), day.isoformat())
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not in universe")
+        log.info("ticker detail ticker=%s as_of=%s", match["ticker"], day.isoformat())
         return {"meta": payload["meta"], "row": match}
+
+    @app.post("/api/client-logs")
+    def client_logs(batch: ClientLogBatch, request: Request) -> JSONResponse:
+        client = request.client.host if request.client else None
+        accepted = _ingest_client_logs(batch.entries, client=client)
+        return JSONResponse({"accepted": accepted})
 
     @app.get("/")
     def index() -> FileResponse:
@@ -352,6 +453,7 @@ def create_app() -> FastAPI:
         return FileResponse(STATIC_DIR / "methodology.html")
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    log.info("Standing web app created")
     return app
 
 

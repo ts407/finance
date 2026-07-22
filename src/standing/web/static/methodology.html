@@ -56,11 +56,17 @@
   </main>
 
   <script type="module">
+    import { logger } from "/static/logger.js";
+
+    logger.setPage("methodology");
+    logger.info("methodology boot");
+
     function card(label, value) {
       return `<div class="param-card"><span>${label}</span><strong>${value}</strong></div>`;
     }
 
     async function load() {
+      logger.info("methodology load start");
       const res = await fetch("/api/methodology");
       if (!res.ok) throw new Error("Failed to load methodology");
       const m = await res.json();
@@ -97,9 +103,14 @@
       document.getElementById("preset-list").innerHTML =
         m.presets.map((p) => `<li><code>${p}</code></li>`).join("");
       document.getElementById("source-posture").textContent = m.source_posture;
+      logger.info("methodology load ok", {
+        methodology_version: m.methodology_version,
+        placeholder: m.placeholder,
+      });
     }
 
     load().catch((err) => {
+      logger.error("methodology load failed", { message: err.message });
       document.getElementById("method-lead").textContent = err.message;
     });
   </script>

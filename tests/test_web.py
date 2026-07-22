@@ -31,6 +31,7 @@ def test_web_health_and_snapshot():
     assert b"Standing" in index.content
     assert b"Export CSV" in index.content
     assert b'id="preset"' in index.content
+    assert b"/static/app.js" in index.content
 
 
 def test_web_filter_and_sort():
