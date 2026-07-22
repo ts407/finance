@@ -1,0 +1,20 @@
+---
+description: Leitplanken für den AktienRadar-Optimierungs-Loop
+alwaysApply: true
+---
+
+# Leitplanken Optimierungs-Loop
+
+- Keine Änderung der produktiven Scoring-Konfiguration ohne durchlaufenen
+  Vergleichsschritt (siehe Skill loop-vergleich-entscheidung).
+- Kein Overfitting an ein kurzes Live-Testfenster: bei widersprüchlichen Signalen
+  zwischen kurz- und mittelfristigem Testfenster ist die konservativere Option zu wählen.
+- Jede Iteration muss rückführbar sein — Rollback auf die vorherige Konfiguration
+  muss jederzeit ohne manuelle Rekonstruktion möglich sein.
+- Transparente Protokollierung hat Vorrang vor Automatisierungsgeschwindigkeit:
+  jeder Zyklus-Durchlauf erzeugt unabhängig vom Ergebnis einen Log-Eintrag.
+- Frontend-Datenerfassung (Skill frontend-datenerfassung) und Trading-Tagebuch
+  (Skill frontend-trading-tagebuch) fließen in Phase "Vergleich" als zusätzliche,
+  aber nicht automatisch score-wirksame Evaluationsbasis ein. Tagebuch-Einträge
+  dienen ausschließlich als qualitative Referenz bei manueller Freigabe, nie als
+  automatischer Trainings- oder Score-Input.
