@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Standing — equity desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <div class="brand-block">
+      <p class="eyebrow">editorial · descriptive</p>
+      <h1 class="brand">Standing</h1>
+      <p class="tagline">Peer-relative Value, Quality, and Momentum — with a bounded attention tilt. Measurement, not a tip.</p>
+    </div>
+    <aside class="desk-meta" id="desk-meta">
+      <div class="meta-chip"><span>as of</span><strong id="meta-asof">—</strong></div>
+      <div class="meta-chip"><span>universe</span><strong id="meta-universe">—</strong></div>
+      <div class="meta-chip"><span>names</span><strong id="meta-n">—</strong></div>
+      <div class="meta-chip warn" id="meta-placeholder-wrap"><span>params</span><strong id="meta-placeholder">—</strong></div>
+    </aside>
+  </header>
+
+  <section class="controls" aria-label="Filters">
+    <label class="field">
+      <span>As of</span>
+      <input type="date" id="as-of" />
+    </label>
+    <label class="field grow">
+      <span>Filter</span>
+      <input type="search" id="filter" placeholder="Ticker or sector" autocomplete="off" />
+    </label>
+    <label class="field">
+      <span>Sort</span>
+      <select id="sort">
+        <option value="final">Final Standing</option>
+        <option value="heat">Attention (S_used)</option>
+        <option value="value">Value</option>
+        <option value="quality">Quality</option>
+        <option value="momentum">Momentum</option>
+      </select>
+    </label>
+    <div class="view-toggle" role="tablist" aria-label="Board">
+      <button type="button" class="tab active" data-view="standing" role="tab" aria-selected="true">Standing</button>
+      <button type="button" class="tab" data-view="heat" role="tab" aria-selected="false">Heat</button>
+    </div>
+    <button type="button" class="ghost" id="reload">Refresh</button>
+  </section>
+
+  <p class="disclaimer">Not investment advice. Final Standing is descriptive peer context. Loud attention ≠ good.</p>
+
+  <main class="workspace">
+    <section class="board" id="board-standing" data-panel="standing">
+      <div class="board-head">
+        <h2>Final Standing</h2>
+        <p>clip(Composite Standing + Attention Tilt, 0–100)</p>
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th>Sector</th>
+              <th class="num">V</th>
+              <th class="num">Q</th>
+              <th class="num">M</th>
+              <th class="num">Composite</th>
+              <th class="num">Tilt</th>
+              <th class="num">Final</th>
+              <th>Social</th>
+            </tr>
+          </thead>
+          <tbody id="standing-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="board hidden" id="board-heat" data-panel="heat">
+      <div class="board-head">
+        <h2>Attention Heat</h2>
+        <p>Primary heat surface — shrunk social score, separated from the composite</p>
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Heat</th>
+              <th class="num">S_obs</th>
+              <th class="num">S_used</th>
+              <th class="num">n</th>
+              <th class="num">c</th>
+              <th class="num">Neg</th>
+              <th class="num">Tilt</th>
+              <th class="num">Final</th>
+            </tr>
+          </thead>
+          <tbody id="heat-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-inner">
+      <button type="button" class="drawer-close" id="drawer-close" aria-label="Close">×</button>
+      <p class="eyebrow" id="drawer-sector">—</p>
+      <h2 id="drawer-ticker">—</h2>
+      <p class="drawer-lead" id="drawer-lead">Evidence breakdown</p>
+
+      <div class="bars" id="drawer-bars"></div>
+
+      <dl class="facts" id="drawer-facts"></dl>
+
+      <p class="drawer-note">
+        Composite Standing averages sector-relative V/Q/M.
+        Attention Tilt uses tanh shrinkage around neutral 50 and cannot dominate the base.
+      </p>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <footer class="foot">
+    <span id="foot-method">methodology —</span>
+    <span>fixture market · fixture social · live social later</span>
+  </footer>
+
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>

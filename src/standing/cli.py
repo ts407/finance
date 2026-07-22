@@ -151,6 +151,23 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError as exc:  # pragma: no cover
+        raise SystemExit(
+            "Web extras required. Install with: pip install -e '.[web]'"
+        ) from exc
+    from standing.web.app import app
+
+    console.print(
+        f"[bold]Standing[/bold] web desk → http://{args.host}:{args.port}  "
+        "(editorial_descriptive · not investment advice)"
+    )
+    uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -182,6 +199,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(r)
     r.add_argument("--out", default="artifacts/reports/standing.html")
     r.set_defaults(func=cmd_report)
+
+    w = sub.add_parser("serve", help="Run the Standing web interface")
+    w.add_argument("--host", default="127.0.0.1")
+    w.add_argument("--port", type=int, default=8000)
+    w.add_argument("--log-level", default="info")
+    w.set_defaults(func=cmd_serve)
 
     return p
 

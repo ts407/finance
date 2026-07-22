@@ -17,12 +17,15 @@ See `docs/aktienradar-konzept-v2.md`, `docs/concept-modular-review.md`, and `doc
 
 ```bash
 python -m pip install -e ".[dev]"
+pytest
 standing table --as-of 2026-07-22
 standing heat --as-of 2026-07-22
 standing score --as-of 2026-07-22 --out artifacts/snapshots
 standing report --as-of 2026-07-22 --out artifacts/reports/standing.html
-pytest
+standing serve --host 127.0.0.1 --port 8000
 ```
+
+Open http://127.0.0.1:8000 for the Standing desk (Final Standing + Attention Heat + evidence drawer).
 
 ## Layout
 
@@ -33,6 +36,7 @@ src/standing/domain/scoring  # pure functions, no I/O
 src/standing/providers       # MarketProvider / SocialProvider (fixture ≡ live API)
 src/standing/universe        # admission + sector occupancy flags
 src/standing/pipeline        # snapshot runner + persistence
+src/standing/web             # FastAPI desk UI + JSON API
 ```
 
 ## Notes
