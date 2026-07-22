@@ -120,6 +120,8 @@ def _parse_as_of(value: str | None) -> date:
 
 @lru_cache(maxsize=32)
 def _cached_snapshot(as_of_iso: str, history_days: int) -> dict[str, Any]:
+    # Scored desk stays fixture-fed while social is gated and params are placeholder.
+    # Live Finnhub mapping is validated via `standing market-preview`, not here.
     as_of = date.fromisoformat(as_of_iso)
     cfg = load_scoring_config()
     snap = run_snapshot(

@@ -11,6 +11,8 @@ from standing.config import load_scoring_config
 from standing.pipeline.report import render_html_report
 from standing.pipeline.snapshot import persist_snapshot, run_snapshot
 from standing.providers import FixtureMarketProvider, FixtureSocialProvider
+from standing.providers.factory import make_market_provider
+from standing.providers.finnhub.mapping import completeness
 
 console = Console()
 
@@ -168,6 +170,53 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_market_preview(args: argparse.Namespace) -> int:
+    """
+    Validate live/cassette market mapping without feeding the scored desk.
+
+    Outputs mapped frame completeness. Does not compute Final Standing.
+    """
+    as_of = _parse_date(args.as_of)
+    provider = make_market_provider(args.provider, cassette_dir=args.cassette_dir)
+    if not getattr(provider, "supports_historical", lambda: True)() and args.as_of:
+        # Live Finnhub refuses non-today; cassette mode may allow pinned dates.
+        pass
+    console.print(
+        f"[bold]Market preview[/bold] provider={provider.name()}  as_of={as_of}  "
+        "[yellow]not scored · not the desk Final[/yellow]"
+    )
+    tickers = None
+    if args.tickers:
+        tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+    try:
+        frame = provider.fetch(as_of, tickers=tickers)
+    except Exception as exc:  # noqa: BLE001 — CLI surface
+        console.print(f"[red]preview failed:[/red] {exc}")
+        return 1
+    stats = completeness(frame)
+    if hasattr(provider, "metadata"):
+        meta = provider.metadata()
+        stats = meta.get("last_completeness") or stats
+    console.print(f"rows={stats.get('n', len(frame))}")
+    cols = stats.get("columns") or {}
+    for col, rate in cols.items():
+        console.print(f"  {col:22s} non-null={rate:.0%}")
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(out, index=False)
+        console.print(f"Wrote {out}")
+    errors = stats.get("errors") or []
+    if errors:
+        console.print(f"[yellow]{len(errors)} ticker errors[/yellow] (showing up to 10)")
+        for err in errors[:10]:
+            console.print(f"  {err}")
+    console.print(
+        "[dim]Social remains fixture-gated. Do not read this preview as Final Standing.[/dim]"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -205,6 +254,25 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--port", type=int, default=8000)
     w.add_argument("--log-level", default="info")
     w.set_defaults(func=cmd_serve)
+
+    mp = sub.add_parser(
+        "market-preview",
+        help="Map Finnhub/Stooq → market frame (adapter validation; not scored desk)",
+    )
+    mp.add_argument("--as-of", default=None, help="YYYY-MM-DD (default: today)")
+    mp.add_argument(
+        "--provider",
+        default="finnhub",
+        help="Market provider (default: finnhub; scored desk stays on fixture)",
+    )
+    mp.add_argument(
+        "--cassette-dir",
+        default=None,
+        help="Directory of Finnhub golden JSON cassettes (offline mapping tests)",
+    )
+    mp.add_argument("--tickers", default=None, help="Comma-separated ticker subset")
+    mp.add_argument("--out", default=None, help="Optional CSV path for mapped frame")
+    mp.set_defaults(func=cmd_market_preview)
 
     return p
 

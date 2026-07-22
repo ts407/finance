@@ -27,7 +27,13 @@ standing heat --as-of 2026-07-22
 standing score --as-of 2026-07-22 --out artifacts/snapshots
 standing report --as-of 2026-07-22 --out artifacts/reports/standing.html
 standing serve --host 127.0.0.1 --port 8000
+# Adapter validation only (does not feed scored Final / desk):
+standing market-preview --provider finnhub \
+  --cassette-dir tests/cassettes/finnhub --tickers AAPL,MSFT \
+  --as-of 2026-07-22 --out artifacts/preview/market.csv
 ```
+
+Scored surfaces (`table` / `heat` / `score` / `report` / web desk) stay on **fixture** market + social. Live Finnhub mapping + Stooq OHLCV + universe seed loaders are behind `standing market-preview` / `STANDING_MARKET_PROVIDER=finnhub` for adapter validation. Field checklist: `docs/field-mapping-finnhub.md`.
 
 ## Web desk URL map
 
@@ -50,12 +56,27 @@ config/scoring.yaml          # methodology_version 2.0.0, placeholder: true
 config/rules.json            # universe admission + universe_id
 src/standing/domain/scoring  # pure functions, no I/O
 src/standing/providers       # MarketProvider / SocialProvider (fixture ≡ live API)
-src/standing/universe        # admission + sector occupancy flags
+src/standing/providers/finnhub  # free metric+profile2 adapter (cassettes / live key)
+src/standing/providers/stooq    # free OHLCV for returns + true ADV_20d
+src/standing/universe        # admission + seed loaders + GICS map
+config/universe              # SP500 / NDX100 / liquid ADR seed CSVs
 src/standing/pipeline        # snapshot runner + persistence
 src/standing/web             # FastAPI desk UI + JSON API
 ```
 
 ## Notes
 
-- Fixture universe is a compact multi-sector demo (~50 names). Full 400–500 with ≥30/sector is a data job; sectors are flagged `sector_low_confidence` until occupancy is met.
+- Fixture universe is a compact multi-sector demo (~50 names). Seed lists under `config/universe/` target the full 400–500 path; sectors are flagged `sector_low_confidence` until occupancy is met.
 - Parameters are synthetic (`placeholder: true`) until an empirical freeze.
+- Finnhub free tier: `/stock/metric` + `/stock/profile2` yes; `/stock/candle` premium (403) — use Stooq for exact returns/ADV.
+- Live market is **not** wired into Final Standing while social remains fixture-gated.
+
+## Live adapter env
+
+| Variable | Purpose |
+|----------|---------|
+| `FINNHUB_API_KEY` | Enables live Finnhub transport |
+| `STANDING_MARKET_PROVIDER` | `fixture` (default) or `finnhub` |
+| `STANDING_FINNHUB_CASSETTES` | Golden JSON dir for offline mapping |
+| `STANDING_STOOQ_CASSETTES` | Stooq CSV cassette dir |
+| `STANDING_ALLOW_NETWORK` | `0` forces cassette-only |

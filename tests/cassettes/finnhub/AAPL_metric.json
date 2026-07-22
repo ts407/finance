@@ -1,0 +1,23 @@
+{
+  "metric": {
+    "10DayAverageTradingVolume": 54.2,
+    "13WeekPriceReturnDaily": 8.5,
+    "26WeekPriceReturnDaily": 15.2,
+    "3MonthAverageTradingVolume": 3410.0,
+    "52WeekHigh": 220.0,
+    "52WeekLow": 160.0,
+    "52WeekPriceReturnDaily": 22.0,
+    "5DayPriceReturnDaily": 1.2,
+    "currentEv/ebitdaAnnual": 22.5,
+    "enterpriseValueMultipleTTM": 23.1,
+    "marketCapitalization": 3200000.0,
+    "operatingMarginTTM": 30.5,
+    "pb": 45.2,
+    "peTTM": 32.4,
+    "revenueGrowthTTMYoy": 6.1,
+    "roeTTM": 147.0
+  },
+  "metricType": "all",
+  "series": {},
+  "symbol": "AAPL"
+}
