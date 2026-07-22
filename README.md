@@ -11,7 +11,11 @@ This is an **editorial_descriptive** research demo — not investment advice, no
 - **Final Standing** = `clip(Base + Tilt, 0, 100)` — single score process (no renorm/floor)
 - Social sources are **fixtures** in v1 (Reddit / StockTwits live gated)
 
-See `docs/aktienradar-konzept-v2.md`, `docs/concept-modular-review.md`, and `docs/concept-plan.md`.
+See:
+
+- `docs/concept-code-mechanisms.md` — **rules & mechanisms implemented in code** (general + detailed)
+- `docs/aktienradar-konzept-v2.md` — methodology source of truth
+- `docs/concept-modular-review.md` / `docs/concept-plan.md` — product concept
 
 ## Quick start
 

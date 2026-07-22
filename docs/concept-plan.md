@@ -3,6 +3,7 @@
 **Status:** Concept plan v2 (revised)  
 **Companion review:** [concept-modular-review.md](./concept-modular-review.md)  
 **Source of truth:** [aktienradar-konzept-v2.md](./aktienradar-konzept-v2.md)  
+**Code mechanisms:** [concept-code-mechanisms.md](./concept-code-mechanisms.md)  
 **Methodology:** Descriptive–explanatory V/Q/M base + bounded Social tilt
 
 ---
