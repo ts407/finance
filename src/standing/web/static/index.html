@@ -12,6 +12,14 @@
 <body>
   <div class="atmosphere" aria-hidden="true"></div>
 
+  <nav class="topnav" aria-label="Primary">
+    <a href="/" class="nav-brand">Standing</a>
+    <div class="nav-links">
+      <a href="/" aria-current="page">Desk</a>
+      <a href="/methodology">Methodology</a>
+    </div>
+  </nav>
+
   <header class="masthead">
     <div class="brand-block">
       <p class="eyebrow">editorial · descriptive</p>
@@ -31,8 +39,24 @@
       <span>As of</span>
       <input type="date" id="as-of" />
     </label>
+    <label class="field">
+      <span>Preset</span>
+      <select id="preset">
+        <option value="balanced">Balanced</option>
+        <option value="value_led">Value-led</option>
+        <option value="quality_led">Quality-led</option>
+        <option value="momentum_led">Momentum-led</option>
+        <option value="attention_confirmed">Attention-confirmed</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Sector</span>
+      <select id="sector">
+        <option value="">All sectors</option>
+      </select>
+    </label>
     <label class="field grow">
-      <span>Filter</span>
+      <span>Filter <kbd>/</kbd></span>
       <input type="search" id="filter" placeholder="Ticker or sector" autocomplete="off" />
     </label>
     <label class="field">
@@ -49,10 +73,12 @@
       <button type="button" class="tab active" data-view="standing" role="tab" aria-selected="true">Standing</button>
       <button type="button" class="tab" data-view="heat" role="tab" aria-selected="false">Heat</button>
     </div>
+    <button type="button" class="ghost" id="export-csv">Export CSV</button>
     <button type="button" class="ghost" id="reload">Refresh</button>
   </section>
 
   <p class="disclaimer">Not investment advice. Final Standing is descriptive peer context. Loud attention ≠ good.</p>
+  <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
 
   <main class="workspace">
     <section class="board" id="board-standing" data-panel="standing">
@@ -112,12 +138,13 @@
       <p class="eyebrow" id="drawer-sector">—</p>
       <h2 id="drawer-ticker">—</h2>
       <p class="drawer-lead" id="drawer-lead">Evidence breakdown</p>
+      <p class="drawer-flags" id="drawer-flags"></p>
 
       <div class="bars" id="drawer-bars"></div>
 
       <dl class="facts" id="drawer-facts"></dl>
 
-      <p class="drawer-note">
+      <p class="drawer-note" id="drawer-note">
         Composite Standing averages sector-relative V/Q/M.
         Attention Tilt uses tanh shrinkage around neutral 50 and cannot dominate the base.
       </p>
@@ -127,7 +154,8 @@
 
   <footer class="foot">
     <span id="foot-method">methodology —</span>
-    <span>fixture market · fixture social · live social later</span>
+    <span id="foot-posture">fixture market · fixture social · live social later</span>
+    <a href="/methodology">Read methodology</a>
   </footer>
 
   <script src="/static/app.js" type="module"></script>

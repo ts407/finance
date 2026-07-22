@@ -1,13 +1,19 @@
 const state = {
   view: "standing",
   data: null,
+  loading: false,
+  sectorsPopulated: false,
 };
 
 const els = {
   asOf: document.getElementById("as-of"),
   filter: document.getElementById("filter"),
   sort: document.getElementById("sort"),
+  preset: document.getElementById("preset"),
+  sector: document.getElementById("sector"),
   reload: document.getElementById("reload"),
+  exportCsv: document.getElementById("export-csv"),
+  statusLine: document.getElementById("status-line"),
   standingBody: document.getElementById("standing-body"),
   heatBody: document.getElementById("heat-body"),
   boardStanding: document.getElementById("board-standing"),
@@ -17,13 +23,17 @@ const els = {
   drawerClose: document.getElementById("drawer-close"),
   drawerTicker: document.getElementById("drawer-ticker"),
   drawerSector: document.getElementById("drawer-sector"),
+  drawerLead: document.getElementById("drawer-lead"),
+  drawerFlags: document.getElementById("drawer-flags"),
   drawerBars: document.getElementById("drawer-bars"),
   drawerFacts: document.getElementById("drawer-facts"),
+  drawerNote: document.getElementById("drawer-note"),
   metaAsof: document.getElementById("meta-asof"),
   metaUniverse: document.getElementById("meta-universe"),
   metaN: document.getElementById("meta-n"),
   metaPlaceholder: document.getElementById("meta-placeholder"),
   footMethod: document.getElementById("foot-method"),
+  footPosture: document.getElementById("foot-posture"),
 };
 
 function todayISO() {
@@ -39,20 +49,58 @@ function tiltClass(v) {
   return Number(v) >= 0 ? "tilt-pos" : "tilt-neg";
 }
 
-async function loadSnapshot() {
+function queryParams() {
   const params = new URLSearchParams({
     as_of: els.asOf.value || todayISO(),
     sort: els.sort.value,
+    preset: els.preset.value,
   });
   if (els.filter.value.trim()) params.set("q", els.filter.value.trim());
-  const res = await fetch(`/api/snapshot?${params.toString()}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || res.statusText);
+  if (els.sector.value) params.set("sector", els.sector.value);
+  return params;
+}
+
+function setStatus(message, kind = "") {
+  els.statusLine.textContent = message || "";
+  els.statusLine.className = `status-line ${kind}`.trim();
+}
+
+function setLoading(isLoading) {
+  state.loading = isLoading;
+  document.body.classList.toggle("is-loading", isLoading);
+  if (isLoading) {
+    setStatus("Loading snapshot…", "loading");
+    els.standingBody.innerHTML = `<tr class="state-row"><td colspan="9">Loading snapshot…</td></tr>`;
+    els.heatBody.innerHTML = `<tr class="state-row"><td colspan="9">Loading snapshot…</td></tr>`;
   }
-  state.data = await res.json();
-  renderMeta();
-  renderTables();
+}
+
+async function loadSnapshot() {
+  setLoading(true);
+  try {
+    const params = queryParams();
+    const res = await fetch(`/api/snapshot?${params.toString()}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || res.statusText);
+    }
+    state.data = await res.json();
+    renderMeta();
+    populateSectors();
+    renderTables();
+    const n = state.data.standings.length;
+    setStatus(
+      n === 0
+        ? "No rows match this preset / filter."
+        : `${n} names · preset ${els.preset.value}`,
+      n === 0 ? "empty" : "",
+    );
+  } catch (err) {
+    showError(err);
+  } finally {
+    state.loading = false;
+    document.body.classList.remove("is-loading");
+  }
 }
 
 function renderMeta() {
@@ -62,6 +110,20 @@ function renderMeta() {
   els.metaN.textContent = String(m.n_names);
   els.metaPlaceholder.textContent = m.placeholder ? "placeholder" : "frozen";
   els.footMethod.textContent = `${m.score_kind} · ${m.methodology_version}`;
+  els.footPosture.textContent = `${m.market_provider} · ${m.social_provider} · live social later`;
+}
+
+function populateSectors() {
+  if (state.sectorsPopulated) return;
+  const counts = state.data.meta.sector_counts || {};
+  const sectors = Object.keys(counts).sort();
+  for (const sector of sectors) {
+    const opt = document.createElement("option");
+    opt.value = sector;
+    opt.textContent = `${sector} (${counts[sector]})`;
+    els.sector.appendChild(opt);
+  }
+  state.sectorsPopulated = true;
 }
 
 function standingRow(row) {
@@ -100,9 +162,14 @@ function heatRow(row) {
 
 function renderTables() {
   const { standings, heat } = state.data;
+  if (!standings.length) {
+    const empty = `<tr class="state-row"><td colspan="9">No rows match this preset / filter.</td></tr>`;
+    els.standingBody.innerHTML = empty;
+    els.heatBody.innerHTML = empty;
+    return;
+  }
   els.standingBody.innerHTML = standings.map(standingRow).join("");
   els.heatBody.innerHTML = heat.map(heatRow).join("");
-  // trigger heat bar animation on next frame
   requestAnimationFrame(() => {
     document.querySelectorAll(".heat-fill").forEach((el) => {
       const w = el.style.width;
@@ -130,12 +197,24 @@ function openDrawer(ticker) {
     || state.data.heat.find((r) => r.ticker === ticker);
   if (!row) return;
 
+  const m = state.data.meta;
   els.drawerTicker.textContent = row.ticker;
   els.drawerSector.textContent = row.sector;
+  els.drawerLead.textContent = "Evidence breakdown — descriptive modules only";
+
+  const flags = [];
+  if (row.sector_low_confidence) {
+    flags.push(`<span class="flag warn">sector low confidence (&lt;30 peers)</span>`);
+  }
+  flags.push(`<span class="flag">${row.social_badge} social</span>`);
+  flags.push(`<span class="flag">c=${fmt(row.confidence_c, 2)} · n=${fmt(row.n, 0)}</span>`);
+  els.drawerFlags.innerHTML = flags.join(" ");
+
   els.drawerBars.innerHTML = [
     bar("Value", row.value, "v"),
     bar("Quality", row.quality, "q"),
-    bar("Momentum", row.momentum, "m"),
+    bar("Momentum (sector)", row.momentum, "m"),
+    bar("Momentum (global display)", row.momentum_global, "m"),
     bar("Composite Standing", row.composite_standing, "v"),
     bar("Attention Tilt (+50 baseline)", 50 + Number(row.attention_tilt) * 5, "tilt", true),
   ].join("");
@@ -149,21 +228,27 @@ function openDrawer(ticker) {
     fact("Neg share", fmt(row.neg_share, 2)),
     fact("Momentum (global)", fmt(row.momentum_global)),
     fact("Social badge", row.social_badge),
+    fact("Sector low-confidence", row.sector_low_confidence ? "yes" : "no"),
+    fact("Source posture", `${m.market_provider} / ${m.social_provider}`),
   ].join("");
+
+  els.drawerNote.innerHTML =
+    "Composite Standing averages sector-relative V/Q/M. "
+    + "Attention Tilt uses tanh + shrinkage around neutral 50 and cannot dominate the base. "
+    + "<strong>Fixture social · live later.</strong> Not investment advice.";
 
   els.drawer.classList.add("open");
   els.drawer.setAttribute("aria-hidden", "false");
   els.scrim.hidden = false;
   requestAnimationFrame(() => {
     els.drawerBars.querySelectorAll(".bar-fill").forEach((el) => {
-      const w = el.dataset.width;
-      el.style.width = w;
+      el.style.width = el.dataset.width;
     });
   });
 }
 
-function bar(label, value, cls, raw = false) {
-  const width = raw ? Math.max(0, Math.min(100, value)) : Math.max(0, Math.min(100, value));
+function bar(label, value, cls, _raw = false) {
+  const width = Math.max(0, Math.min(100, Number(value) || 0));
   return `<div class="bar-row">
     <span><span>${label}</span><span>${fmt(value)}</span></span>
     <div class="bar-track"><div class="bar-fill ${cls}" data-width="${width}%"></div></div>
@@ -180,15 +265,23 @@ function closeDrawer() {
   els.scrim.hidden = true;
 }
 
+function exportCsv() {
+  const params = queryParams();
+  window.location.href = `/api/snapshot.csv?${params.toString()}`;
+}
+
 function bind() {
   els.asOf.value = "2026-07-22";
-  els.reload.addEventListener("click", () => loadSnapshot().catch(showError));
-  els.asOf.addEventListener("change", () => loadSnapshot().catch(showError));
-  els.sort.addEventListener("change", () => loadSnapshot().catch(showError));
+  els.reload.addEventListener("click", () => loadSnapshot());
+  els.exportCsv.addEventListener("click", exportCsv);
+  els.asOf.addEventListener("change", () => loadSnapshot());
+  els.sort.addEventListener("change", () => loadSnapshot());
+  els.preset.addEventListener("change", () => loadSnapshot());
+  els.sector.addEventListener("change", () => loadSnapshot());
   let timer;
   els.filter.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(() => loadSnapshot().catch(showError), 180);
+    timer = setTimeout(() => loadSnapshot(), 180);
   });
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.addEventListener("click", () => setView(btn.dataset.view));
@@ -205,13 +298,21 @@ function bind() {
   els.scrim.addEventListener("click", closeDrawer);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDrawer();
+    if (e.key === "/" && document.activeElement !== els.filter) {
+      e.preventDefault();
+      els.filter.focus();
+    }
   });
 }
 
 function showError(err) {
   console.error(err);
-  els.standingBody.innerHTML = `<tr><td colspan="9">Failed to load: ${err.message}</td></tr>`;
+  const msg = err && err.message ? err.message : String(err);
+  setStatus(`Failed to load: ${msg}`, "error");
+  const row = `<tr class="state-row error"><td colspan="9">Failed to load: ${msg}</td></tr>`;
+  els.standingBody.innerHTML = row;
+  els.heatBody.innerHTML = row;
 }
 
 bind();
-loadSnapshot().catch(showError);
+loadSnapshot();

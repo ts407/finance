@@ -25,7 +25,19 @@ standing report --as-of 2026-07-22 --out artifacts/reports/standing.html
 standing serve --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000 for the Standing desk (Final Standing + Attention Heat + evidence drawer).
+## Web desk URL map
+
+| URL | Purpose |
+|-----|---------|
+| http://127.0.0.1:8000/ | Standing desk (Final Standing + Attention Heat + evidence drawer) |
+| http://127.0.0.1:8000/methodology | Methodology page (live params from config) |
+| `/api/health` | Health + score_kind |
+| `/api/methodology` | Formulas + live scoring.yaml params |
+| `/api/snapshot` | JSON standings (`preset`, `sector`, `q`, `sort`, `as_of`) |
+| `/api/snapshot.csv` | CSV export with the same filters |
+| `/api/ticker/{ticker}` | Single-name evidence payload |
+
+Desk controls: presets (balanced / value_led / quality_led / momentum_led / attention_confirmed), sector filter, search (`/` focuses), CSV export.
 
 ## Layout
 

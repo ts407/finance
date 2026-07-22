@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Standing — methodology</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Primary">
+    <a href="/" class="nav-brand">Standing</a>
+    <div class="nav-links">
+      <a href="/">Desk</a>
+      <a href="/methodology" aria-current="page">Methodology</a>
+    </div>
+  </nav>
+
+  <main class="method-page">
+    <p class="eyebrow">editorial · descriptive</p>
+    <h1>Methodology</h1>
+    <p id="method-lead">Loading live parameters from config…</p>
+
+    <div class="method-banner warn" id="placeholder-banner" hidden>
+      <strong>Parameters are placeholders.</strong>
+      Values below come from <code>config/scoring.yaml</code> and were calibrated on synthetic data until an empirical freeze.
+    </div>
+
+    <div class="method-banner" id="non-advice-banner">
+      Not investment advice.
+    </div>
+
+    <h2>Framing</h2>
+    <ul id="framing-list"></ul>
+
+    <h2>Formulas</h2>
+    <div class="code-block" id="formulas-block"></div>
+
+    <h2>Live config</h2>
+    <div class="param-grid" id="param-grid"></div>
+
+    <h2>Presets</h2>
+    <ul id="preset-list"></ul>
+
+    <h2>Source posture</h2>
+    <p id="source-posture">—</p>
+
+    <p class="disclaimer" style="padding:0;margin-top:2rem">
+      Product surface uses Composite Standing, Attention Tilt, and Final Standing —
+      never Buyworthiness or Buy-Rank.
+    </p>
+  </main>
+
+  <script type="module">
+    function card(label, value) {
+      return `<div class="param-card"><span>${label}</span><strong>${value}</strong></div>`;
+    }
+
+    async function load() {
+      const res = await fetch("/api/methodology");
+      if (!res.ok) throw new Error("Failed to load methodology");
+      const m = await res.json();
+
+      document.getElementById("method-lead").textContent =
+        `${m.score_kind} · methodology ${m.methodology_version}`;
+      document.getElementById("non-advice-banner").textContent = m.non_advice;
+
+      const banner = document.getElementById("placeholder-banner");
+      if (m.placeholder) banner.hidden = false;
+
+      document.getElementById("framing-list").innerHTML =
+        m.framing.map((f) => `<li>${f}</li>`).join("");
+
+      document.getElementById("formulas-block").textContent =
+        Object.entries(m.formulas).map(([k, v]) => `${k}: ${v}`).join("\n");
+
+      const st = m.social_tilt;
+      const sh = m.shrinkage;
+      const base = m.base;
+      document.getElementById("param-grid").innerHTML = [
+        card("tilt_max", st.tilt_max),
+        card("beta", st.beta),
+        card("tilt shape", st.shape),
+        card("symmetric", String(st.symmetric)),
+        card("shrinkage k", sh.k),
+        card("prior", sh.prior),
+        card("peer frame", base.peer_frame),
+        card("quality margin", base.quality_margin),
+        card("source cap", m.social_pipeline.source_cap_per_ticker_day),
+        card("min names / sector", m.universe.min_names_per_sector),
+      ].join("");
+
+      document.getElementById("preset-list").innerHTML =
+        m.presets.map((p) => `<li><code>${p}</code></li>`).join("");
+      document.getElementById("source-posture").textContent = m.source_posture;
+    }
+
+    load().catch((err) => {
+      document.getElementById("method-lead").textContent = err.message;
+    });
+  </script>
+</body>
+</html>
