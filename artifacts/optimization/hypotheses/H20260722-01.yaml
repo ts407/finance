@@ -1,8 +1,8 @@
 id: H20260722-01
-cycle_id: C20260722-01
-created_utc: '2026-07-23T05:28:29.846912+00:00'
-basis: 'Offline sensitivity on fixtures: shrinkage.k=15 → 0% ranking turnover (mean_n=1256,
-  mean_c=0.990). Revisit when live Social has thin n / non-zero sparse_share.'
+cycle_id: C20260722-02
+created_utc: '2026-07-23T08:05:59.880481+00:00'
+basis: shrinkage.k increases remain deferred on fixture mean_n≫k (mean_n=1256); revisit
+  with sparse live Social.
 change:
 - path: shrinkage.k
   to: 15

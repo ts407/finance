@@ -1,0 +1,51 @@
+{
+  "phase": "loop-vergleich-entscheidung",
+  "hypothesis_id": "H20260722-05",
+  "cycle_id": "C20260722-02",
+  "shadow_report": "artifacts/optimization/shadow/H20260722-05/shadow_report_2026-07-14_2026-07-22.json",
+  "timestamp_utc": "2026-07-23T08:06:12.710534+00:00",
+  "decision": "reject",
+  "accepted": false,
+  "checks": {
+    "spearman_lift_ge_min": false,
+    "turnover_le_max": true,
+    "tilt_decreased": true,
+    "lift_ci_excludes_zero": true,
+    "placeholder_allows_promote": false,
+    "social_gap_not_worse": false
+  },
+  "thresholds": {
+    "min_spearman_lift": 0.02,
+    "max_mean_ranking_turnover": 0.4,
+    "require_tilt_decrease": true,
+    "require_ci_excludes_zero_lift": true,
+    "allow_promote_when_placeholder": false
+  },
+  "metrics": {
+    "spearman_lift": 0.01085011467440189,
+    "spearman_lift_bootstrap": {
+      "mean": 0.010850114674401954,
+      "ci_low": 0.00800692212514127,
+      "ci_high": 0.014256047390123228,
+      "n": 7
+    },
+    "ranking_turnover": 0.3465608465608465,
+    "ranking_turnover_bootstrap": {
+      "mean": 0.3465608465608465,
+      "ci_low": 0.2830687830687831,
+      "ci_high": 0.417989417989418,
+      "n": 7
+    },
+    "tilt_delta": -0.48431566457279907,
+    "social_gap": {
+      "productive_turnover_full_vs_gap": 0.9629629629629629,
+      "shadow_turnover_full_vs_gap": 0.9814814814814815,
+      "gap_turnover_delta_shadow_minus_prod": 0.0185185185185186
+    }
+  },
+  "rationale": "Productive config remains placeholder=true — auto-promotion blocked by epistemic lock. Social-gap turnover: prod=96.3%, shadow=98.1%. No trading-journal entries available; qualitative diary reference skipped. Forward-return rank correlation / top-percentile hit-rate unavailable on fixtures — decision uses proxy metrics only.",
+  "promote_to_productive": false,
+  "next_phase": "loop-analyse-hypothese",
+  "productive_config_unchanged": true,
+  "decision_path": "artifacts/optimization/decisions/H20260722-05_decision.json"
+}

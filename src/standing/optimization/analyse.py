@@ -162,11 +162,15 @@ def write_baseline_report(
     as_of: date,
     history_days: int = 14,
     out_dir: Path | None = None,
+    cycle_id: str | None = None,
+    fine_sensitivity: bool = False,
 ) -> dict[str, Any]:
     """
     Run baseline + sensitivity diagnostics and persist under artifacts/optimization.
     Does not modify productive config/scoring.yaml.
     """
+    from standing.optimization.cycle import default_perturbations, next_cycle_id
+
     ensure_layout()
     cfg = load_scoring_config()
     snap = run_baseline_snapshot(as_of=as_of, cfg=cfg, history_days=history_days)
@@ -175,7 +179,13 @@ def write_baseline_report(
     csv_path = persist_snapshot(snap, target)
 
     diagnosis = diagnose_snapshot(snap)
-    sensitivity = run_sensitivity(snap, cfg=cfg, history_days=history_days)
+    sensitivity = run_sensitivity(
+        snap,
+        cfg=cfg,
+        history_days=history_days,
+        perturbations=default_perturbations(fine=fine_sensitivity),
+    )
+    cid = cycle_id or next_cycle_id(as_of)
 
     config_snapshot = {
         "path": str(cfg.path),
@@ -190,7 +200,7 @@ def write_baseline_report(
 
     report = {
         "phase": "loop-analyse-hypothese",
-        "cycle_id": f"C{as_of.isoformat().replace('-', '')}-01",
+        "cycle_id": cid,
         "productive_config": config_snapshot,
         "baseline": diagnosis,
         "sensitivity": [asdict(row) for row in sensitivity],
@@ -202,13 +212,33 @@ def write_baseline_report(
         ],
     }
 
-    report_path = target / f"baseline_report_{as_of.isoformat()}.json"
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    report_path = target / f"baseline_report_{as_of.isoformat()}_{cid}.json"
+    # Keep stable latest alias for tooling that expects the as_of filename
+    latest_alias = target / f"baseline_report_{as_of.isoformat()}.json"
+    # Store portable relative paths in the JSON payload
+    from standing.config import ROOT as _ROOT
+
+    def _rel(p: Path) -> str:
+        try:
+            return str(p.resolve().relative_to(_ROOT.resolve()))
+        except ValueError:
+            return str(p)
+
+    if isinstance(config_snapshot.get("path"), str):
+        try:
+            config_snapshot["path"] = _rel(Path(config_snapshot["path"]))
+        except Exception:
+            config_snapshot["path"] = "config/scoring.yaml"
+
+    report["snapshot_csv"] = _rel(csv_path)
+    payload = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
+    report_path.write_text(payload, encoding="utf-8")
+    latest_alias.write_text(payload, encoding="utf-8")
 
     config_yaml_path = target / f"config_snapshot_{as_of.isoformat()}.yaml"
     with config_yaml_path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(cfg.raw, f, sort_keys=False, allow_unicode=True)
 
-    report["report_path"] = str(report_path)
-    report["config_snapshot_path"] = str(config_yaml_path)
+    report["report_path"] = _rel(report_path)
+    report["config_snapshot_path"] = _rel(config_yaml_path)
     return report

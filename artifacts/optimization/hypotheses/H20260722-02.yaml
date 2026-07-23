@@ -1,0 +1,22 @@
+id: H20260722-02
+cycle_id: C20260722-02
+created_utc: '2026-07-23T08:05:59.876328+00:00'
+basis: 'Cycle C20260722-02: prior rejects failed turnover>40% (aggressive tilt_max/beta
+  cuts). Offline tilt_max=9 stays under safety gate 30% (turnover=27.8%) with spearman
+  lift +0.0099 and lower mean|tilt| (5.73→5.16).'
+change:
+- path: social_tilt.tilt_max
+  to: 9
+prediction:
+  metric: ranking_turnover_vs_baseline
+  expected_direction: below_40%_gate
+  secondary_metric: spearman_final_vs_composite
+  expected_secondary: increase
+  rationale: tilt_max=9 selected as conservative step after prior overshoot.
+shadow_config: artifacts/optimization/configs/H20260722-02_20260723T080559Z.yaml
+productive_config: config/scoring.yaml
+handoff: loop-analyse-hypothese
+status: decision_reject
+shadow_report: artifacts/optimization/shadow/H20260722-02/shadow_report_2026-07-14_2026-07-22.json
+shadow_capture: artifacts/optimization/shadow/H20260722-02/capture_2026-07-14_2026-07-22.csv
+decision_path: artifacts/optimization/decisions/H20260722-02_decision.json
