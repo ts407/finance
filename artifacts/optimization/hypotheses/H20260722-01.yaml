@@ -1,0 +1,11 @@
+id: H20260722-01
+cycle_id: C20260722-01
+created_utc: '2026-07-23T05:28:29.846912+00:00'
+basis: 'Offline sensitivity on fixtures: shrinkage.k=15 → 0% ranking turnover (mean_n=1256,
+  mean_c=0.990). Revisit when live Social has thin n / non-zero sparse_share.'
+change:
+- path: shrinkage.k
+  to: 15
+status: deferred
+handoff: null
+productive_config: config/scoring.yaml

@@ -8,7 +8,7 @@ venv/
 dist/
 build/
 *.egg-info/
-artifacts/
+artifacts/*
 !artifacts/optimization/
 !artifacts/optimization/**
 artifacts/optimization/baseline/standings_*.csv
