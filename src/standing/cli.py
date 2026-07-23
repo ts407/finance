@@ -325,7 +325,8 @@ def cmd_loop_shadow(args: argparse.Namespace) -> int:
             f"{hid}: turnover={agg['mean_ranking_turnover_vs_productive']:.1%}  "
             f"spearman_shadow={agg['mean_spearman_final_vs_composite_shadow']:.4f} "
             f"(prod={agg['mean_spearman_final_vs_composite_productive']:.4f})  "
-            f"|tilt| {agg['mean_abs_tilt_productive']:.2f}→{agg['mean_abs_tilt_shadow']:.2f}"
+            f"|tilt| {agg['mean_abs_tilt_productive']:.2f}→{agg['mean_abs_tilt_shadow']:.2f}  "
+            f"fwd_lift={agg.get('mean_forward_spearman_lift', float('nan')):+.4f}"
         )
         append_log(
             {
@@ -366,7 +367,8 @@ def cmd_loop_vergleich(args: argparse.Namespace) -> int:
         out = run_vergleich(hypothesis_id=hid)
         console.print(
             f"{hid}: [bold]{out['decision'].upper()}[/bold]  "
-            f"lift={out['metrics']['spearman_lift']:+.4f}  "
+            f"accept_candidate={out.get('accept_candidate')}  "
+            f"fwd_lift={out['metrics'].get('forward_spearman_lift_bootstrap', {}).get('mean', float('nan')):+.4f}  "
             f"turnover={out['metrics']['ranking_turnover']:.1%}  "
             f"promote={out['promote_to_productive']}"
         )
@@ -377,18 +379,25 @@ def cmd_loop_vergleich(args: argparse.Namespace) -> int:
                 "cycle_id": out.get("cycle_id"),
                 "hypothesis_id": hid,
                 "decision": out["decision"],
+                "accept_candidate": out.get("accept_candidate"),
                 "checks": out["checks"],
                 "metrics": {
                     "spearman_lift": out["metrics"]["spearman_lift"],
                     "ranking_turnover": out["metrics"]["ranking_turnover"],
                     "tilt_delta": out["metrics"]["tilt_delta"],
                     "spearman_lift_bootstrap": out["metrics"]["spearman_lift_bootstrap"],
+                    "forward_spearman_lift_bootstrap": out["metrics"].get(
+                        "forward_spearman_lift_bootstrap"
+                    ),
+                    "top_decile_excess_lift_bootstrap": out["metrics"].get(
+                        "top_decile_excess_lift_bootstrap"
+                    ),
                 },
                 "promote_to_productive": out["promote_to_productive"],
                 "decision_path": out["decision_path"],
                 "rationale": out["rationale"],
                 "handoff": "loop-analyse-hypothese",
-                "productive_config_unchanged": True,
+                "productive_config_unchanged": out.get("productive_config_unchanged", True),
             }
         )
     console.print("Logged decisions; next cycle → loop-analyse-hypothese")

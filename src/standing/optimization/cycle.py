@@ -87,9 +87,19 @@ def formulate_hypotheses(
             rows.append(item)
 
     existing_ids: set[str] = set()
+    tested_overrides: set[tuple[str, str]] = set()
     if HYPOTHESES_DIR.exists():
+        import yaml
+
         for path in HYPOTHESES_DIR.glob("H*.yaml"):
             existing_ids.add(path.stem)
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                continue
+            for change in data.get("change") or []:
+                if isinstance(change, dict) and "path" in change:
+                    tested_overrides.add((str(change["path"]), repr(change.get("to"))))
     for row in read_log():
         hid = row.get("hypothesis_id")
         if hid:
@@ -112,12 +122,15 @@ def formulate_hypotheses(
         and r["spearman_final_vs_base"] > base_spearman
         and r["mean_abs_tilt"] < base_tilt
         and r["ranking_turnover_vs_baseline"] > 0.05
+        and not any(
+            (p, repr(v)) in tested_overrides for p, v in r["change"].items()
+        )
     ]
-    # Prefer higher spearman lift, then lower turnover
+    # Prefer lower turnover first (stability), then higher composite alignment lift
     gated.sort(
         key=lambda r: (
-            -(r["spearman_final_vs_base"] - base_spearman),
             r["ranking_turnover_vs_baseline"],
+            -(r["spearman_final_vs_base"] - base_spearman),
         )
     )
 
@@ -144,25 +157,25 @@ def formulate_hypotheses(
             if path in used_paths:
                 continue
             hid, seq = alloc_id(seq)
-            lift = r["spearman_final_vs_base"] - base_spearman
             ready.append(
                 {
                     "hypothesis_id": hid,
                     "basis": (
-                        f"Cycle {cycle_id}: prior rejects failed turnover>{max_turnover_gate:.0%} "
-                        f"(aggressive tilt_max/beta cuts). Offline {r['label']} stays under "
+                        f"Cycle {cycle_id}: prior cycles rejected aggressive cuts on turnover "
+                        f"and/or lacked forward-return evidence. Offline {r['label']} stays under "
                         f"safety gate {offline_gate:.0%} "
-                        f"(turnover={r['ranking_turnover_vs_baseline']:.1%}) with spearman lift "
-                        f"{lift:+.4f} and lower mean|tilt| ({base_tilt:.2f}→{r['mean_abs_tilt']:.2f})."
+                        f"(turnover={r['ranking_turnover_vs_baseline']:.1%}) with lower mean|tilt| "
+                        f"({base_tilt:.2f}→{r['mean_abs_tilt']:.2f}); evaluate via next-weekday "
+                        f"ret_1m forward proxy in shadow/vergleich."
                     ),
                     "overrides": dict(r["change"]),
                     "prediction": {
-                        "metric": "ranking_turnover_vs_baseline",
-                        "expected_direction": f"below_{max_turnover_gate:.0%}_gate",
-                        "secondary_metric": "spearman_final_vs_composite",
-                        "expected_secondary": "increase",
+                        "metric": "mean_forward_spearman_lift",
+                        "expected_direction": "non_negative_with_ci",
+                        "secondary_metric": "ranking_turnover_vs_baseline",
+                        "expected_secondary": f"below_{max_turnover_gate:.0%}_gate",
                         "rationale": (
-                            f"{r['label']} selected as conservative step after prior overshoot."
+                            f"{r['label']} — conservative untested step for forward-proxy eval."
                         ),
                     },
                 }

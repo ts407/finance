@@ -40,6 +40,8 @@ def test_decide_rejects_high_turnover():
             "mean_ranking_turnover_vs_productive": 0.63,
             "mean_abs_tilt_shadow": 4.0,
             "mean_abs_tilt_productive": 5.0,
+            "mean_forward_spearman_lift": 0.05,
+            "mean_top_decile_excess_lift": 0.01,
         },
         "shadow_daily": [
             {"spearman_final_vs_composite": 0.95, "ranking_turnover_vs_productive": 0.6},
@@ -49,11 +51,60 @@ def test_decide_rejects_high_turnover():
             {"spearman_final_vs_composite": 0.90},
             {"spearman_final_vs_composite": 0.89},
         ],
+        "forward": {
+            "daily_forward_spearman_lift": [0.05, 0.04],
+            "daily_top_decile_excess_lift": [0.01, 0.02],
+        },
     }
-    out = decide_from_shadow(report, gap={"productive_turnover_full_vs_gap": 0.5, "shadow_turnover_full_vs_gap": 0.4, "gap_turnover_delta_shadow_minus_prod": -0.1})
+    out = decide_from_shadow(
+        report,
+        gap={
+            "productive_turnover_full_vs_gap": 0.5,
+            "shadow_turnover_full_vs_gap": 0.4,
+            "gap_turnover_delta_shadow_minus_prod": -0.1,
+        },
+    )
     assert out["decision"] == "reject"
+    assert out["accept_candidate"] is False
     assert out["promote_to_productive"] is False
     assert out["checks"]["turnover_le_max"] is False
+
+
+def test_decide_accept_candidate_without_promote():
+    report = {
+        "aggregates": {
+            "mean_spearman_final_vs_composite_shadow": 0.93,
+            "mean_spearman_final_vs_composite_productive": 0.91,
+            "mean_ranking_turnover_vs_productive": 0.25,
+            "mean_abs_tilt_shadow": 5.0,
+            "mean_abs_tilt_productive": 5.7,
+        },
+        "shadow_daily": [
+            {"spearman_final_vs_composite": 0.93, "ranking_turnover_vs_productive": 0.2},
+            {"spearman_final_vs_composite": 0.94, "ranking_turnover_vs_productive": 0.3},
+            {"spearman_final_vs_composite": 0.92, "ranking_turnover_vs_productive": 0.25},
+        ],
+        "productive_daily": [
+            {"spearman_final_vs_composite": 0.91},
+            {"spearman_final_vs_composite": 0.90},
+            {"spearman_final_vs_composite": 0.91},
+        ],
+        "forward": {
+            "daily_forward_spearman_lift": [0.08, 0.06, 0.07],
+            "daily_top_decile_excess_lift": [0.01, 0.02, 0.015],
+        },
+    }
+    out = decide_from_shadow(
+        report,
+        gap={
+            "productive_turnover_full_vs_gap": 0.5,
+            "shadow_turnover_full_vs_gap": 0.4,
+            "gap_turnover_delta_shadow_minus_prod": -0.1,
+        },
+    )
+    assert out["accept_candidate"] is True
+    assert out["decision"] == "accept_candidate"
+    assert out["promote_to_productive"] is False
 
 
 def test_run_vergleich_end_to_end(tmp_path: Path, monkeypatch):
@@ -72,8 +123,9 @@ def test_run_vergleich_end_to_end(tmp_path: Path, monkeypatch):
 
     run_shadow_test(hypothesis_id="H-CMP-01", end_as_of=date(2026, 7, 22), n_days=3)
     out = run_vergleich(hypothesis_id="H-CMP-01")
-    assert out["decision"] in {"accept", "reject"}
+    assert out["decision"] in {"accept", "accept_candidate", "reject"}
     assert out["promote_to_productive"] is False
+    assert "forward_spearman_lift_bootstrap" in out["metrics"]
     assert Path(tmp_path / "opt" / "decisions" / "H-CMP-01_decision.json").exists()
     assert load_scoring_config().social_tilt["tilt_max"] == 10
     updated = yaml.safe_load(hyp_path.read_text())

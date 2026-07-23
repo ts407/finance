@@ -12,6 +12,7 @@ import yaml
 from standing.config import ROOT, ScoringConfig, load_scoring_config
 from standing.domain.scoring.pipeline import ScoreInputs, score_cross_section
 from standing.optimization.analyse import _badge_shares, _ranking_turnover, _spearman
+from standing.optimization.forward import forward_return_metrics, summarize_forward_pairs
 from standing.optimization.paths import HYPOTHESES_DIR, SHADOW_DIR, ensure_layout
 from standing.providers import FixtureMarketProvider, FixtureSocialProvider
 from standing.providers.base import FetchCursor
@@ -191,6 +192,8 @@ def run_shadow_test(
     day_rows: list[dict[str, Any]] = []
     capture_frames: list[pd.DataFrame] = []
     prod_metrics_rows: list[dict[str, Any]] = []
+    prod_forward_rows: list[dict[str, Any]] = []
+    shadow_forward_rows: list[dict[str, Any]] = []
 
     for d in days:
         prod, shadow, capture = _score_shared(
@@ -214,11 +217,16 @@ def run_shadow_test(
                 **prod_badges,
             }
         )
+        prod_fwd = forward_return_metrics(prod, as_of=d, market=market)
+        shadow_fwd = forward_return_metrics(shadow, as_of=d, market=market)
+        prod_forward_rows.append({"as_of": d.isoformat(), **prod_fwd})
+        shadow_forward_rows.append({"as_of": d.isoformat(), **shadow_fwd})
         capture.insert(1, "hypothesis_id", hypothesis_id)
         capture_frames.append(capture)
 
     shadow_df = pd.DataFrame(day_rows)
     prod_df = pd.DataFrame(prod_metrics_rows)
+    forward_summary = summarize_forward_pairs(prod_forward_rows, shadow_forward_rows)
 
     out_dir = SHADOW_DIR / hypothesis_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -240,7 +248,8 @@ def run_shadow_test(
             "data_source": "fixture_shared_fetch",
             "note": (
                 "Fixtures stand in for live data; productive and shadow scored on "
-                "identical market+social fetches per day."
+                "identical market+social fetches per day. Forward proxy uses next "
+                "weekday fixture ret_1m."
             ),
         },
         "productive_config": _rel(prod_cfg.path),
@@ -249,6 +258,9 @@ def run_shadow_test(
         "prediction": hyp.get("prediction"),
         "productive_daily": prod_metrics_rows,
         "shadow_daily": day_rows,
+        "productive_forward_daily": prod_forward_rows,
+        "shadow_forward_daily": shadow_forward_rows,
+        "forward": forward_summary,
         "aggregates": {
             "mean_ranking_turnover_vs_productive": float(
                 shadow_df["ranking_turnover_vs_productive"].mean()
@@ -264,6 +276,12 @@ def run_shadow_test(
             "mean_abs_final_delta": float(shadow_df["mean_abs_final_delta"].mean()),
             "mean_spearman_final_productive_vs_shadow": float(
                 shadow_df["spearman_final_productive_vs_shadow"].mean()
+            ),
+            "mean_forward_spearman_lift": float(
+                forward_summary.get("mean_forward_spearman_lift", float("nan"))
+            ),
+            "mean_top_decile_excess_lift": float(
+                forward_summary.get("mean_top_decile_excess_lift", float("nan"))
             ),
         },
         "report_path": _rel(report_path),
