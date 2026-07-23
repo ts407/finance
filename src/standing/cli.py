@@ -306,6 +306,99 @@ def cmd_loop_analyse(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_shadow(args: argparse.Namespace) -> int:
+    """Shadow live-test: productive vs isolated hypothesis configs on shared data."""
+    from standing.optimization.log import append_log
+    from standing.optimization.paths import ensure_layout
+    from standing.optimization.shadow import run_shadow_test
+
+    ensure_layout()
+    end_as_of = _parse_date(args.as_of)
+    hypothesis_ids = args.hypothesis or ["H20260722-03", "H20260722-04"]
+    console.print(
+        "[bold]loop-live-test-shadow[/bold] — "
+        f"end={end_as_of}  days={args.days}  hypotheses={', '.join(hypothesis_ids)}"
+    )
+
+    results: list[dict] = []
+    for hid in hypothesis_ids:
+        summary = run_shadow_test(
+            hypothesis_id=hid,
+            end_as_of=end_as_of,
+            n_days=args.days,
+            history_days=args.history_days,
+        )
+        agg = summary["aggregates"]
+        console.print(
+            f"{hid}: turnover={agg['mean_ranking_turnover_vs_productive']:.1%}  "
+            f"spearman_shadow={agg['mean_spearman_final_vs_composite_shadow']:.4f} "
+            f"(prod={agg['mean_spearman_final_vs_composite_productive']:.4f})  "
+            f"|tilt| {agg['mean_abs_tilt_productive']:.2f}→{agg['mean_abs_tilt_shadow']:.2f}"
+        )
+        append_log(
+            {
+                "phase": "loop-live-test-shadow",
+                "cycle_id": summary.get("cycle_id"),
+                "hypothesis_id": hid,
+                "decision": "shadow_complete",
+                "window": summary["window"],
+                "aggregates": agg,
+                "report_path": summary["report_path"],
+                "handoff": "loop-vergleich-entscheidung",
+                "productive_config_unchanged": True,
+            }
+        )
+        results.append(summary)
+
+    console.print(f"Completed {len(results)} shadow test(s); handoff → loop-vergleich-entscheidung")
+    return 0
+
+
+def cmd_loop_vergleich(args: argparse.Namespace) -> int:
+    """Compare shadow vs productive and record accept/reject (no silent promote)."""
+    from standing.optimization.log import append_log
+    from standing.optimization.paths import ensure_layout
+    from standing.optimization.vergleich import run_vergleich
+
+    ensure_layout()
+    hypothesis_ids = args.hypothesis or ["H20260722-03", "H20260722-04"]
+    console.print(
+        "[bold]loop-vergleich-entscheidung[/bold] — "
+        f"hypotheses={', '.join(hypothesis_ids)}"
+    )
+    for hid in hypothesis_ids:
+        out = run_vergleich(hypothesis_id=hid)
+        console.print(
+            f"{hid}: [bold]{out['decision'].upper()}[/bold]  "
+            f"lift={out['metrics']['spearman_lift']:+.4f}  "
+            f"turnover={out['metrics']['ranking_turnover']:.1%}  "
+            f"promote={out['promote_to_productive']}"
+        )
+        console.print(f"  {out['rationale']}")
+        append_log(
+            {
+                "phase": "loop-vergleich-entscheidung",
+                "cycle_id": out.get("cycle_id"),
+                "hypothesis_id": hid,
+                "decision": out["decision"],
+                "checks": out["checks"],
+                "metrics": {
+                    "spearman_lift": out["metrics"]["spearman_lift"],
+                    "ranking_turnover": out["metrics"]["ranking_turnover"],
+                    "tilt_delta": out["metrics"]["tilt_delta"],
+                    "spearman_lift_bootstrap": out["metrics"]["spearman_lift_bootstrap"],
+                },
+                "promote_to_productive": out["promote_to_productive"],
+                "decision_path": out["decision_path"],
+                "rationale": out["rationale"],
+                "handoff": "loop-analyse-hypothese",
+                "productive_config_unchanged": True,
+            }
+        )
+    console.print("Logged decisions; next cycle → loop-analyse-hypothese")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -350,6 +443,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_common(la)
     la.set_defaults(func=cmd_loop_analyse)
+
+    ls = sub.add_parser(
+        "loop-shadow",
+        help="Optimization cycle: shadow live-test productive vs hypothesis configs",
+    )
+    add_common(ls)
+    ls.add_argument(
+        "--hypothesis",
+        action="append",
+        default=None,
+        help="Hypothesis ID (repeatable). Default: H20260722-03 H20260722-04",
+    )
+    ls.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Number of trading days in the shadow window (default: 7)",
+    )
+    ls.set_defaults(func=cmd_loop_shadow)
+
+    lv = sub.add_parser(
+        "loop-vergleich",
+        help="Optimization cycle: compare shadow results and accept/reject",
+    )
+    lv.add_argument(
+        "--hypothesis",
+        action="append",
+        default=None,
+        help="Hypothesis ID (repeatable). Default: H20260722-03 H20260722-04",
+    )
+    lv.set_defaults(func=cmd_loop_vergleich)
 
     return p
 

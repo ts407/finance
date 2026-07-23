@@ -16,5 +16,8 @@ prediction:
     rank moves.
 shadow_config: artifacts/optimization/configs/H20260722-03_20260723T052829Z.yaml
 productive_config: config/scoring.yaml
-handoff: loop-live-test-shadow
-status: ready_for_shadow
+handoff: loop-analyse-hypothese
+status: decision_reject
+shadow_report: artifacts/optimization/shadow/H20260722-03/shadow_report_2026-07-14_2026-07-22.json
+shadow_capture: artifacts/optimization/shadow/H20260722-03/capture_2026-07-14_2026-07-22.csv
+decision_path: artifacts/optimization/decisions/H20260722-03_decision.json
