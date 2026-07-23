@@ -168,6 +168,144 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_analyse(args: argparse.Namespace) -> int:
+    """Baseline diagnostics + hypothesis artifacts for optimization cycle 1."""
+    from standing.optimization.analyse import write_baseline_report
+    from standing.optimization.hypotheses import write_hypothesis
+    from standing.optimization.log import append_log, latest_entry
+    from standing.optimization.paths import ensure_layout
+
+    ensure_layout()
+    as_of = _parse_date(args.as_of)
+    prior = latest_entry()
+    console.print(
+        "[bold]loop-analyse-hypothese[/bold] — "
+        f"as_of={as_of}  prior_log={'yes' if prior else 'empty (baseline cycle)'}"
+    )
+    report = write_baseline_report(as_of=as_of, history_days=args.history_days)
+    cycle_id = report["cycle_id"]
+    baseline = report["baseline"]
+    console.print(
+        f"Baseline n={baseline['n_names']}  "
+        f"spearman(final,composite)={baseline['spearman_final_vs_composite']:.4f}  "
+        f"sparse={baseline['sparse_share']:.1%}  "
+        f"mean|tilt|={baseline['mean_abs_tilt']:.2f}"
+    )
+
+    sens = sorted(
+        report["sensitivity"],
+        key=lambda row: (row["ranking_turnover_vs_baseline"], row["tilt_vs_baseline_mae"]),
+        reverse=True,
+    )
+    console.print("Sensitivity (top by ranking turnover):")
+    for row in sens[:4]:
+        console.print(
+            f"  {row['label']}: turnover={row['ranking_turnover_vs_baseline']:.1%}  "
+            f"tilt_mae={row['tilt_vs_baseline_mae']:.3f}  "
+            f"sparse={row['sparse_share']:.1%}"
+        )
+
+    hyp_specs = [
+        {
+            "hypothesis_id": "H20260722-03",
+            "basis": (
+                f"Largest actionable deviation: Social tilt reorders rankings "
+                f"(baseline spearman(final,composite)={baseline['spearman_final_vs_composite']:.4f}, "
+                f"mean|tilt|={baseline['mean_abs_tilt']:.2f}). Sensitivity tilt_max=8 → "
+                f"turnover={next(r['ranking_turnover_vs_baseline'] for r in sens if r['label']=='tilt_max=8'):.1%}, "
+                f"spearman rises toward composite. Conservative tilt cap is the primary shadow candidate."
+            ),
+            "overrides": {"social_tilt.tilt_max": 8},
+            "prediction": {
+                "metric": "spearman_final_vs_composite",
+                "expected_direction": "increase",
+                "secondary_metric": "mean_abs_tilt",
+                "expected_secondary": "decrease",
+                "rationale": "tilt_max:10→8 scales tanh tilt down; offline delta already shows ~52% rank moves.",
+            },
+        },
+        {
+            "hypothesis_id": "H20260722-04",
+            "basis": (
+                f"Second-largest tilt-shape lever: beta=1.0 shows "
+                f"turnover={next(r['ranking_turnover_vs_baseline'] for r in sens if r['label']=='beta=1.0'):.1%} "
+                f"and higher final↔composite Spearman vs baseline. Chosen over shrinkage.k because "
+                f"fixture mean_n={baseline['mean_n']:.0f} makes k:10→15 nearly inert "
+                f"(offline turnover≈0%)."
+            ),
+            "overrides": {"social_tilt.beta": 1.0},
+            "prediction": {
+                "metric": "ranking_turnover_vs_baseline",
+                "expected_direction": "material_but_less_than_tilt_max_6",
+                "secondary_metric": "spearman_final_vs_composite",
+                "expected_secondary": "increase",
+                "rationale": "beta:1.5→1.0 flattens tanh response around S_used=50 without changing tilt_max.",
+            },
+        },
+    ]
+
+    # Deferred: H20260722-01 (k↑) — keep as documented deferral for live sparse regimes.
+    deferred = {
+        "hypothesis_id": "H20260722-01",
+        "status": "deferred",
+        "reason": (
+            "Offline sensitivity on fixtures: shrinkage.k=15 → 0% ranking turnover "
+            f"(mean_n={baseline['mean_n']:.0f}, mean_c={baseline['mean_confidence_c']:.3f}). "
+            "Revisit when live Social has thin n / non-zero sparse_share."
+        ),
+        "overrides": {"shrinkage.k": 15},
+    }
+
+    written: list[dict[str, str]] = []
+    for spec in hyp_specs:
+        hyp_path, cfg_path = write_hypothesis(
+            hypothesis_id=spec["hypothesis_id"],
+            basis=spec["basis"],
+            overrides=spec["overrides"],
+            prediction=spec["prediction"],
+            cycle_id=cycle_id,
+        )
+        written.append(
+            {"id": spec["hypothesis_id"], "hypothesis": str(hyp_path), "config": str(cfg_path)}
+        )
+        console.print(f"Hypothesis {spec['hypothesis_id']} → {hyp_path}")
+
+    from standing.optimization.hypotheses import write_deferred_hypothesis
+
+    deferred_path = write_deferred_hypothesis(
+        hypothesis_id=deferred["hypothesis_id"],
+        reason=deferred["reason"],
+        overrides=deferred["overrides"],
+        cycle_id=cycle_id,
+    )
+    console.print(f"Deferred {deferred['hypothesis_id']} → {deferred_path}")
+
+    append_log(
+        {
+            "phase": "loop-analyse-hypothese",
+            "cycle_id": cycle_id,
+            "decision": "hypotheses_formulated",
+            "as_of": as_of.isoformat(),
+            "baseline": {
+                "n_names": baseline["n_names"],
+                "spearman_final_vs_composite": baseline["spearman_final_vs_composite"],
+                "sparse_share": baseline["sparse_share"],
+                "mean_abs_tilt": baseline["mean_abs_tilt"],
+                "mean_confidence_c": baseline["mean_confidence_c"],
+                "mean_n": baseline["mean_n"],
+            },
+            "hypotheses": [w["id"] for w in written],
+            "deferred_hypotheses": [deferred["hypothesis_id"]],
+            "report_path": report["report_path"],
+            "handoff": "loop-live-test-shadow",
+            "productive_config_unchanged": True,
+        }
+    )
+    console.print("Appended log entry; handoff → loop-live-test-shadow")
+    console.print(f"Report: {report['report_path']}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -205,6 +343,13 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--port", type=int, default=8000)
     w.add_argument("--log-level", default="info")
     w.set_defaults(func=cmd_serve)
+
+    la = sub.add_parser(
+        "loop-analyse",
+        help="Optimization cycle: baseline diagnostics + formulate hypotheses",
+    )
+    add_common(la)
+    la.set_defaults(func=cmd_loop_analyse)
 
     return p
 

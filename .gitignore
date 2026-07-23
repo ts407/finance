@@ -9,4 +9,8 @@ dist/
 build/
 *.egg-info/
 artifacts/
+!artifacts/optimization/
+!artifacts/optimization/**
+artifacts/optimization/baseline/standings_*.csv
+artifacts/optimization/baseline/standings_*.meta.json
 .DS_Store
