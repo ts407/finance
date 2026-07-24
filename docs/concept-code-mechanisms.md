@@ -2,6 +2,7 @@
 
 **Status:** Implementation concept (maps methodology → code)  
 **Methodology source of truth:** [aktienradar-konzept-v2.md](./aktienradar-konzept-v2.md)  
+**Data acquisition:** [datenbeschaffung.md](./datenbeschaffung.md)  
 **Product plan:** [concept-plan.md](./concept-plan.md) · **Modular review:** [concept-modular-review.md](./concept-modular-review.md)  
 **Config:** `config/scoring.yaml`, `config/rules.json`  
 **Code root:** `src/standing/`
@@ -136,7 +137,7 @@ date, ticker, source_id, mention_count, neg_share, upvotes
 
 `FetchCursor(as_of, token?)` is identical for fixture and future live ingest.
 
-v1 implementation: `FixtureSocialProvider` (simulated Reddit + StockTwits daily rows).
+v1 implementation: `FixtureSocialProvider` (simulated Reddit + StockTwits daily rows). Planned live: Bluesky backfill/search behind the same interface; Wikipedia pageviews as attention proxy (see [datenbeschaffung.md](./datenbeschaffung.md)).
 
 **Rule:** scoring never imports a concrete provider. Orchestration wires providers in `pipeline.snapshot` / CLI.
 
@@ -377,7 +378,7 @@ The code deliberately does **not** implement:
 | Renorm / floor alternate score | Only `final_standing = clip(base+tilt)` |
 | Reddit comments | `reddit_comments: false`; fixtures are submission-grain |
 | News inside Pulse | No news provider / feature columns |
-| Live Reddit / StockTwits | Only fixture providers wired in CLI |
+| Live Reddit / StockTwits | Only fixture providers wired in CLI; Bluesky/Wikipedia = planned open paths |
 | Silent pillar renorm | Incomplete V/Q/M → `NaN` base |
 | “Buy” product labels | `score_kind` + field names use Standing / Tilt |
 

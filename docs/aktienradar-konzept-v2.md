@@ -22,11 +22,14 @@ Drei Dinge, die den Bauplan direkt betreffen — nicht Meinung, sondern geprüft
 
 **Marktdaten-Landschaft hat sich verschoben.** Polygon.io ist zu **Massive.com** rebrandet und hat **kein Free-Tier mehr** (Start ~$99/Monat). Der pragmatische Free-Live-Pfad ist jetzt **Finnhub** (60 Calls/min, inkl. Fundamentals und eigenem News-Sentiment-Endpunkt) — nicht mehr yfinance.
 
+**Korrektur (Juli 2026):** „Social ist nicht backfillbar" gilt **nicht für Bluesky**. `com.atproto.sync.getRepo` liefert unauthentifiziert die volle Repo-CAR; `listRepos` / `listReposByCollection` ermöglichen Netzwerk- bzw. collection-gezielten Backfill. Details und Reihenfolge: [datenbeschaffung.md](./datenbeschaffung.md).
+
 ### Harte Konsequenz für v1
 
-1. **Fixtures sind nicht „nice to have", sondern der einzige gangbare v1-Pfad.** Beide Social-Quellen sind gated; ein publizierbarer Live-Ingest ist Wochen bis Monate entfernt und teuer.
-2. **Es gibt keine Social-Historie zum Backfüllen.** Das 7-Tage-Fenster muss durch **vorwärtslaufenden Ingest akkumuliert** werden: Scores stabilisieren sich erst nach ≥7 Tagen Dauerbetrieb. Das ist keine Detailfrage, sondern bestimmt die Bootstrap-Logik und macht den Research-IC-Pfad (Modul B) erst nach Wochen auswertbar.
-3. **Die Parameter dürfen nicht eingefroren werden.** Alles unten Kalibrierte ist gegen synthetische Daten gesetzt.
+1. **Reddit und StockTwits bleiben gated** — Fixtures sind für diese beiden Quellen und für CI weiterhin Pflicht, nicht „nice to have".
+2. **Bluesky ist backfillbar** — der bisherige Zeitdruck („≥7 Tage vorwärts mitschreiben, bevor Social belastbar ist") entfällt für diese Quelle. Für Reddit/ST gilt der Vorwärts-Bootstrap weiter, falls sie jemals live gehen.
+3. **Attention ist testbar ohne Social-Live:** Wikipedia-Pageviews (C2) und Archivkorpora für NLP (C3) laufen parallel; siehe Datenbeschaffungs-Reihenfolge.
+4. **Die Parameter dürfen nicht eingefroren werden.** Alles unten Kalibrierte ist gegen synthetische Daten gesetzt.
 
 ---
 
@@ -83,7 +86,7 @@ Tilt_pos_effektiv = d · Tilt_pos          # nur auf positiven Tilt angewendet
 
 ## 4 — Social-Pipeline (konkrete Parameter)
 
-- **Quellen v1:** Reddit (inkl. **r/wallstreetbets, mit Cap + eigenem Lexikon + Breakdown**) und StockTwits — beide operativ derzeit nur als Fixture (Modul 0). Ausschluss von WSB wäre stille Messverzerrung.
+- **Quellen v1:** **Bluesky** (offener Backfill-/Live-Pfad) plus Reddit/StockTwits als Fixture (inkl. **r/wallstreetbets, mit Cap + eigenem Lexikon + Breakdown**). Ausschluss von WSB wäre stille Messverzerrung. Parallel: Wikipedia-Pageviews als Attention-Proxy ([datenbeschaffung.md](./datenbeschaffung.md)).
 - **Source-Cap:** je Ticker/Tag Anteil je `source_id` ≤ **0,50**; Overflow downsampeln. Sichtbar als „cap headroom" im Pulse.
 - **Mention-Features:** `log1p(count)` → **Anteil am Tages-Gesamtvolumen des Universums** → 7-Tage-Aggregat. Share (statt Rohzahl) kontrolliert plattformweite Aktivitätstage und Sampling-Lücken. ASVI-Analogon (`log(mentions_7d) − median(log(mentions_{t-8..t-1}))`) optional v1.1.
 - **Engagement (Entscheidung zu E3):** getrennt behandeln —
@@ -120,26 +123,32 @@ S_used = c · S_obs + (1 − c) · prior ,   c = n / (n + k)
 
 ## 7 — Datenquellen (konkrete Matrix, post-Verifikation)
 
-### Social
+Vollständige Wege / Alternativen / Reihenfolge: [datenbeschaffung.md](./datenbeschaffung.md).
 
-| Quelle | Live-Status Juli 2026 | Rolle v1 |
-|---|---|---|
-| Reddit | approval-gated, kein Backfill, kein Date-Range, kommerziell fünfstellig | **Fixture**; Live nur als vorwärts-akkumulierender OAuth-Ingest (non-commercial), frühestens nach Freigabe |
-| StockTwits | neue Registrierungen geschlossen; Live nur via Firestream-Partnerschaft | **Fixture**; Live „coming after ToS/Firestream" |
-| Dritt-Wrapper | ToS-unsicher | **nicht** für publiziertes Produkt |
+### Social (C1) und Attention-Proxies (C2)
 
-### Markt
+| Quelle | Live-Status Juli 2026 | Historie | Rolle |
+|---|---|---|---|
+| **Bluesky** | offen, kein Antrag | **ja** (`getRepo` / Suche mit Datumsbereich) | **primärer offener Social-Pfad**; Backfill vor Mitschrift |
+| Reddit | approval-gated, kein Backfill/Date-Range, kommerziell fünfstellig | nein | **Fixture**; Live nur vorwärts nach Freigabe; RFR = Methodik-Bonus, nicht Produkt-Feed |
+| StockTwits | neue Registrierungen geschlossen; Live nur Firestream | nein | **Fixture**; Live „coming after ToS/Firestream" |
+| Wikipedia-Pageviews | REST frei, kein Key | täglich ab ~2015 | **Attention-Proxy parallel**; Hypothese unabhängig von Social-Dichte testen |
+| Dritt-Wrapper | ToS-unsicher | — | **nicht** für publiziertes Produkt |
+
+### Markt & Fundamentals
 
 | Quelle | Stand Juli 2026 | Rolle |
 |---|---|---|
 | Fixtures + Seed-CSV | reproduzierbar | Pflicht für CI/Dev |
 | **Finnhub** | Free 60 Calls/min, Fundamentals + News-Sentiment | **Free-Live-Pfad (ersetzt yfinance-Empfehlung)** |
+| Stooq / Bulk-CSV | Jahrzehnte OHLCV, 0 € | Backfill-Markt; Bereinigung prüfen |
+| **SEC EDGAR (XBRL)** | frei, inkl. Einreichungsdatum | **Point-in-Time-Fundamentals** (US); Look-ahead-Bias ausschließbar |
 | Twelve Data | Free 800 Calls/Tag, 50+ Börsen | globale Abdeckung v1.1 |
 | EODHD | ~€20/Mon., 150k Ticker, Bulk-Download | universumsweite Fundamentals / Backtest |
 | Polygon → **Massive** | kein Free-Tier mehr, ab ~$99/Mon. | nur falls Tick/Realtime nötig — für EOD-Screener **überdimensioniert** |
 | yfinance | inoffiziell, brüchig, ToS-grau | allenfalls Dev-Notbehelf |
 
-Interface bleibt `MarketProvider.fetch(...)` / `SocialProvider.fetch_since(cursor)` — **identisch** für Fixture und Live.
+Interface bleibt `MarketProvider.fetch(...)` / `SocialProvider.fetch_since(cursor)` — **identisch** für Fixture und Live. Attention-Proxies (Wikipedia) hinter demselben Feature-Kontrakt oder als eigener `AttentionProvider`, der in denselben Shrinkage-/Tilt-Pfad mündet.
 
 ---
 
@@ -169,7 +178,8 @@ shrinkage:
   display_badges: { sparse_below: 5, ok_at: 15 }
 
 social_pipeline:
-  sources: [reddit, stocktwits]
+  sources: [bluesky, reddit, stocktwits]  # reddit/stocktwits = fixture until gated; bluesky = open backfill
+  attention_proxies: [wikipedia_pageviews]  # C2 — parallel hypothesis test
   include_wsb: true
   source_cap_per_ticker_day: 0.50
   mention_transform: "log1p_then_universe_share"
@@ -224,8 +234,8 @@ Konkrete Auflagen fürs Produkt:
 | F2 | Prior | **50 flach** v1 | eine Bewegung weniger; sektorneutral v1.1 |
 | G1 | US+ADR zuerst | **ja** | dort ist Social-Abdeckung |
 | G2 | ADV/Cap in rules_json | **ja**, versioniert | Reproduzierbarkeit |
-| H1 | commercial/non-commercial | **non-commercial Research-Demo**, Fixture-first | Live-Pfad gated + teuer |
-| H2 | Fallback ohne Reddit-Live | **Fixtures + StockTwits-Fixture**, Live „später" | beide Quellen aktuell gated |
+| H1 | commercial/non-commercial | **non-commercial Research-Demo**, Fixture-first für Reddit/ST | Reddit/ST gated; Bluesky + Wikipedia offen |
+| H2 | Fallback ohne Reddit-Live | **Bluesky-Backfill + Wikipedia-Pageviews**; Reddit/ST weiter Fixture | Social ist Beschaffung, kein reiner Zeitdruck |
 | K1 | Name | **kein „Radar"**: Standing / Mentions Desk / Retail Attention Board | Prognose-Konnotation meiden |
 | — | Fixtures | **ja**, NB-Mentions + AR(1)-Sentiment, `placeholder: true` in Config | UI nicht gegen gutartige Daten tunen |
 
@@ -234,16 +244,19 @@ Konkrete Auflagen fürs Produkt:
 ## 11 — Was v1 architektonisch erzwingt (nicht verhandelbar)
 
 1. **Fixture/Live-Interface identisch**, sonst ist der spätere Live-Switch ein Rewrite.
-2. **Vorwärts-Ingest-Bootstrap**: keine Social-Historie kaufbar → Scores erst nach ≥7 Tagen belastbar; Snapshots ab Tag 1 persistieren (`as_of`, `universe_id`, `methodology_version`).
-3. **Pure Scoring-Funktionen ohne I/O** (`domain/scoring/`), unit-testbar; async Sentiment-Worker.
-4. **Pflicht-Tests:** `test_shrinkage_continuity`, `test_no_two_score_processes`, plus ein Test, der prüft, dass `placeholder: true` in jedem Fixture-gebundenen Config-Pfad gesetzt ist.
-5. **Empirische Pflichtarbeit vor jedem Parameter-Freeze:** Korrelationsmatrix `(V,Q,M,S)` und Varianzanteil des Final-Scores durch den Tilt ausweisen — als Methodik-Anhang, nicht als heimliches Fitting.
+2. **Social-Historie wo möglich backfüllen** (Bluesky zuerst); Vorwärts-Bootstrap gilt nur noch für Quellen ohne Historie (Reddit/ST). Snapshots ab Tag 1 persistieren (`as_of`, `universe_id`, `methodology_version`).
+3. **Attention-Hypothese parallel über Proxies testen** (Wikipedia-Pageviews), unabhängig von Social-Dichte.
+4. **Pure Scoring-Funktionen ohne I/O** (`domain/scoring/`), unit-testbar; Sentiment auf Archivkorpora entwickeln (C3), async Worker.
+5. **Pflicht-Tests:** `test_shrinkage_continuity`, `test_no_two_score_processes`, plus ein Test, der prüft, dass `placeholder: true` in jedem Fixture-gebundenen Config-Pfad gesetzt ist.
+6. **Empirische Pflichtarbeit vor jedem Parameter-Freeze:** Korrelationsmatrix `(V,Q,M,S)` und Varianzanteil des Final-Scores durch den Tilt ausweisen — als Methodik-Anhang, nicht als heimliches Fitting.
 
 ---
 
 ## 12 — Offen / braucht Freigabe
 
-- Ist v1 **explizit non-commercial Research-Demo** (Fixtures + optional Finnhub-Live-Markt, Social simuliert)? Das ist nach aktueller API-Lage die einzige realistische Option — bitte bestätigen, damit der Reddit/StockTwits-Live-Pfad sauber als „später, nach Freigabe/Firestream" markiert werden kann.
+- Reihenfolge der Datenbeschaffung bestätigen: **Bluesky-Backfill → Wikipedia parallel → NLP auf Archiven → Reddit/RFR als Bonus** ([datenbeschaffung.md](./datenbeschaffung.md)).
+- Ist v1 **explizit non-commercial Research-Demo**? Reddit/StockTwits bleiben Fixture bzw. „später"; Bluesky + Wikipedia sind die offenen Attention-Pfade.
 - Namensentscheidung + Markenrecherche.
 - Zielgröße 400 vs. 500 — die Sektor-Besetzung ≥ 30 ist die eigentliche Bedingung; die Gesamtzahl folgt daraus.
 - Juristische Einzelfallprüfung MAR **vor** jeder öffentlichen Verbreitung aus der EU.
+- SEC-EDGAR-XBRL vs. Vendor-Fundamentals für Point-in-Time-Value/Quality.

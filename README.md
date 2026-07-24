@@ -9,12 +9,13 @@ This is an **editorial_descriptive** research demo — not investment advice, no
 - **Composite Standing** = equal-weight sector-relative Value / Quality / Momentum
 - **Attention Tilt** = `tilt_max * tanh(β * (S_used − 50) / 50)` with shrinkage + hype dampener
 - **Final Standing** = `clip(Base + Tilt, 0, 100)` — single score process (no renorm/floor)
-- Social sources are **fixtures** in v1 (Reddit / StockTwits live gated)
+- Social sources: **fixtures** for Reddit / StockTwits in v1; **Bluesky backfill** and **Wikipedia pageviews** are the open attention paths ([datenbeschaffung.md](./docs/datenbeschaffung.md))
 
 See:
 
 - `docs/concept-code-mechanisms.md` — **rules & mechanisms implemented in code** (general + detailed)
 - `docs/aktienradar-konzept-v2.md` — methodology source of truth
+- `docs/datenbeschaffung.md` — data acquisition paths, alternatives, order
 - `docs/concept-modular-review.md` / `docs/concept-plan.md` — product concept
 
 ## Quick start

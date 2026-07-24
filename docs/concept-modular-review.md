@@ -2,6 +2,7 @@
 
 **Status:** Concept v2 (revised)  
 **Source of truth:** [aktienradar-konzept-v2.md](./aktienradar-konzept-v2.md)  
+**Data acquisition:** [datenbeschaffung.md](./datenbeschaffung.md)  
 **Code mechanisms:** [concept-code-mechanisms.md](./concept-code-mechanisms.md)  
 **Methodology:** Descriptive–explanatory V/Q/M base + bounded Social tilt  
 **Verification snapshot:** July 2026 (API / market-data landscape)
@@ -32,11 +33,13 @@ Working name candidates (avoid “Radar”; measurement, not forecast): **Standi
 1. **Reddit is largely closed for product ingest.** Responsible Builder Policy is approval-gated; unauthenticated `.json` returns 403 since May 2026; no date-range search, no comment search, ~1k listing cap, **no historical backfill**. Commercial pricing starts effectively five-figures.
 2. **StockTwits is not accepting new developers.** Live path is Enterprise Firestream partnership only. Third-party wrappers are ToS-unsafe for a published product.
 3. **Market-data landscape shifted.** Polygon → **Massive.com**, no free tier (~$99+/mo). Pragmatic free live path: **Finnhub** (60 calls/min, fundamentals + news-sentiment endpoint) — not yfinance.
+4. **Correction:** “Social is not backfillable” is **false for Bluesky**. `com.atproto.sync.getRepo` is unauthenticated; `listRepos` / `listReposByCollection` support full or collection-targeted backfill. See [datenbeschaffung.md](./datenbeschaffung.md).
 
 ### Hard consequences
 
-- **Fixtures are the only viable v1 social path** for a publishable demo.
-- **No social history to backfill** → 7-day windows must accumulate via forward ingest; scores stabilize only after ≥7 days of continuous operation.
+- **Reddit / StockTwits stay fixture-only** for CI and until approval/Firestream; they are not the only attention path.
+- **Bluesky history is procurable** → no forward-only bootstrap pressure for that source; Reddit/ST still need forward accumulation if they ever go live.
+- **Attention hypothesis is testable without social live** via Wikipedia pageviews (and NLP on public archive corpora).
 - **Parameters must not be frozen** until measured on a real cross-section (`placeholder: true` in config).
 
 ---
@@ -117,7 +120,7 @@ Thresholds 5 / 15 are **display badges** only (`sparse` / `ok`), not scoring mec
 
 | Topic | v1 lock |
 |-------|---------|
-| Sources | Reddit (incl. **r/wallstreetbets**, with cap + own lexicon + breakdown) + StockTwits — both **fixtures** until live paths open |
+| Sources | **Bluesky** (open backfill/live) + Reddit / StockTwits **fixtures** (WSB with cap + lexicon); Wikipedia pageviews as parallel attention proxy |
 | Source cap | Per ticker/day, share per `source_id` ≤ **0.50**; overflow downsampled; show “cap headroom” in Pulse |
 | Mention feature | `log1p(count)` → **share of that day’s universe total volume** → 7-day aggregate |
 | Engagement | Volume feature = **raw count share**; sentiment aggregation = **engagement-weighted** `w = 1 + log1p(upvotes)`, capped |
@@ -176,8 +179,8 @@ Heat / attention UI is a **primary** surface feature, clearly separated from the
 | F2 | Prior | **Flat 50** v1 |
 | G1 | US+ADR first | **Yes** |
 | G2 | ADV/cap in rules_json | **Yes**, versioned |
-| H1 | Commercial posture | **Non-commercial research demo**, fixture-first |
-| H2 | Fallback without Reddit live | **Fixtures**; live later after approval/Firestream |
+| H1 | Commercial posture | **Non-commercial research demo**; fixtures for Reddit/ST |
+| H2 | Fallback without Reddit live | **Bluesky backfill + Wikipedia pageviews**; Reddit/ST stay fixtures |
 | K1 | Product name | **No “Radar”** — Standing / Mentions Desk / Retail Attention Board |
 
 ---
@@ -185,13 +188,14 @@ Heat / attention UI is a **primary** surface feature, clearly separated from the
 ## 10. Non-negotiable architecture implications
 
 1. **Fixture and live providers share the same interface** (`MarketProvider.fetch` / `SocialProvider.fetch_since(cursor)`).
-2. **Forward-ingest bootstrap** — persist snapshots from day 1; treat scores as reliable only after ≥7 days.
-3. **Pure scoring functions without I/O** under `domain/scoring/`; async sentiment worker.
-4. **Required tests:** `test_shrinkage_continuity`, `test_no_two_score_processes`, and a check that `placeholder: true` is set on every fixture-bound config path.
-5. **Before any parameter freeze:** publish correlation matrix `(V,Q,M,S)` and the variance share of Final Standing attributable to the tilt — methodology appendix, not silent fitting.
+2. **Backfill social history where possible** (Bluesky first); forward-ingest bootstrap only for sources without history (Reddit/ST). Persist snapshots from day 1.
+3. **Test the attention hypothesis in parallel via proxies** (Wikipedia pageviews), independent of social density.
+4. **Pure scoring functions without I/O** under `domain/scoring/`; develop sentiment on archive corpora; async worker.
+5. **Required tests:** `test_shrinkage_continuity`, `test_no_two_score_processes`, and a check that `placeholder: true` is set on every fixture-bound config path.
+6. **Before any parameter freeze:** publish correlation matrix `(V,Q,M,S)` and the variance share of Final Standing attributable to the tilt — methodology appendix, not silent fitting.
 
 ---
 
 ## 11. Summary
 
-v2 locks a **descriptive V/Q/M Composite Standing** (equal weight, GICS-11 sector peers, operating margin, sector-relative momentum) plus a **bounded tanh Social Attention Tilt** with shrinkage and a hype dampener. Social is not a 40% pillar. Fixtures-first is mandatory given gated Reddit/StockTwits. Language stays factual; buy-semantics stay off the product surface.
+v2 locks a **descriptive V/Q/M Composite Standing** (equal weight, GICS-11 sector peers, operating margin, sector-relative momentum) plus a **bounded tanh Social Attention Tilt** with shrinkage and a hype dampener. Social is not a 40% pillar. Reddit/StockTwits stay fixture-gated; **Bluesky is backfillable** and Wikipedia pageviews provide a multi-year attention proxy — procurement, not a ticking clock. Language stays factual; buy-semantics stay off the product surface.

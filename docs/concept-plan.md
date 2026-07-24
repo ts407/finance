@@ -3,6 +3,7 @@
 **Status:** Concept plan v2 (revised)  
 **Companion review:** [concept-modular-review.md](./concept-modular-review.md)  
 **Source of truth:** [aktienradar-konzept-v2.md](./aktienradar-konzept-v2.md)  
+**Data acquisition:** [datenbeschaffung.md](./datenbeschaffung.md)  
 **Code mechanisms:** [concept-code-mechanisms.md](./concept-code-mechanisms.md)  
 **Methodology:** Descriptive–explanatory V/Q/M base + bounded Social tilt
 
@@ -25,19 +26,19 @@ Not a tip sheet. Not a buy-rank product.
 ### In scope (v1)
 
 - Universe: US-listed + liquid ADRs (~400–500 names; **≥30 per GICS-11 sector**)
-- Market path: fixtures (required) + optional **Finnhub** live EOD/fundamentals
-- Social path: **fixtures only** (Reddit + StockTwits simulated); live marked “later”
+- Market path: fixtures (required) + optional **Finnhub** live EOD/fundamentals; SEC EDGAR XBRL for point-in-time fundamentals
+- Social / attention path: **Bluesky backfill** (primary open source) + **Wikipedia pageviews** (proxy) + Reddit/StockTwits **fixtures**; NLP on public archive corpora
 - Scoring: Base, shrinkage, tanh tilt, hype dampener — single generation process
 - Surfaces: standing table, heat/attention board, methodology page, evidence/breakdown
 - Snapshot persistence: `as_of`, `universe_id`, `methodology_version`
-- Research IC: **notebook only**, look-ahead-free, evaluable only after weeks of ingest
+- Research IC: **notebook only**, look-ahead-free; evaluable once historical attention series exist (Bluesky / Wikipedia), not only after weeks of forward ingest
 
 ### Out of scope (v1)
 
 - UK/CA/AU listings  
 - Reddit comments as inputs  
 - News inside Pulse  
-- Commercial social firehose (Firestream / paid Reddit)  
+- Commercial social firehose (Firestream / paid Reddit) as product feed  
 - Portfolio construction, execution, options  
 - Any “Buy” / “Buyworthiness” product label  
 - Freezing tilt/shrinkage parameters on synthetic data
@@ -48,32 +49,39 @@ Not a tip sheet. Not a buy-rank product.
 
 | Constraint (July 2026) | Plan response |
 |------------------------|---------------|
-| Reddit approval-gated, no backfill | Fixture social; optional forward OAuth ingest only after approval |
+| Reddit approval-gated, no backfill | Fixture social; optional forward OAuth after approval; RFR = methodology validation only |
 | StockTwits closed to new developers | Fixture social; Firestream = post-v1 partnership track |
-| No social history for sale | Bootstrap ≥7 days before claiming stable social scores |
+| Bluesky history is public (`getRepo` / search) | **Backfill first**, not forward-only recording |
+| Wikipedia pageviews free since ~2015 | Parallel multi-year attention proxy before betting on social density |
 | Polygon/Massive paid-only | Prefer Finnhub free live for market; Massive only if tick/realtime required |
 | yfinance brittle / ToS-grey | Dev stopgap at most — not production |
 
-**Confirm with stakeholders:** v1 is explicitly a **non-commercial research demo** (fixtures + optional Finnhub market live, social simulated). Live Reddit/StockTwits stays labeled “later, after approval/Firestream.”
+**Procurement order:** Bluesky backfill → Wikipedia pageviews in parallel → sentiment on archive corpora → Reddit/RFR as bonus. See [datenbeschaffung.md](./datenbeschaffung.md).
+
+**Confirm with stakeholders:** v1 is a **non-commercial research demo**. Reddit/StockTwits stay “later, after approval/Firestream”; Bluesky + Wikipedia are the open attention paths.
 
 ---
 
 ## 4. Data matrix
 
-### Social
+### Social (C1) & attention proxies (C2)
 
-| Source | Live status (Jul 2026) | v1 role |
-|--------|------------------------|---------|
-| Reddit | Approval-gated; no backfill/date-range; commercial five-figures | **Fixture**; live only as forward OAuth after approval |
-| StockTwits | New registrations closed; Firestream partnership | **Fixture**; live “after ToS/Firestream” |
-| Third-party wrappers | ToS-unsafe | **Not** for published product |
+| Source | Live status (Jul 2026) | History | v1 role |
+|--------|------------------------|---------|---------|
+| **Bluesky** | Open, no application | **Yes** | **Primary open social path**; backfill before live-only ingest |
+| Reddit | Approval-gated; no backfill/date-range; commercial five-figures | No | **Fixture**; live only as forward OAuth after approval |
+| StockTwits | New registrations closed; Firestream partnership | No | **Fixture**; live “after ToS/Firestream” |
+| Wikipedia pageviews | Free REST, no key | Daily since ~2015 | **Parallel attention proxy** |
+| Third-party wrappers | ToS-unsafe | — | **Not** for published product |
 
-### Market
+### Market & fundamentals
 
 | Source | Status | Role |
 |--------|--------|------|
 | Fixtures + seed CSV | Reproducible | **Required** for CI/dev |
 | **Finnhub** | Free 60 calls/min; fundamentals + news-sentiment | **Free live path** (replaces yfinance recommendation) |
+| Stooq / bulk CSV | Decades of OHLCV, $0 | Market backfill; validate cleaning |
+| **SEC EDGAR (XBRL)** | Free, includes filing date | **Point-in-time fundamentals** (US) |
 | Twelve Data | Free 800 calls/day | Global coverage v1.1 |
 | EODHD | ~€20/mo, bulk | Universe-wide fundamentals / backtest |
 | Polygon → Massive | No free tier, ~$99+/mo | Only if tick/realtime needed — oversized for EOD screener |
@@ -86,6 +94,7 @@ MarketProvider.fetch(...)
 SocialProvider.fetch_since(cursor)
 ```
 
+Attention proxies (Wikipedia) feed the same feature contract or a sibling `AttentionProvider` into shrinkage / tilt.
 ---
 
 ## 5. Concrete config (`config/scoring.yaml`)
@@ -114,7 +123,8 @@ shrinkage:
   display_badges: { sparse_below: 5, ok_at: 15 }
 
 social_pipeline:
-  sources: [reddit, stocktwits]
+  sources: [bluesky, reddit, stocktwits]  # reddit/stocktwits = fixture until gated; bluesky = open backfill
+  attention_proxies: [wikipedia_pageviews]  # C2 — parallel hypothesis test
   include_wsb: true
   source_cap_per_ticker_day: 0.50
   mention_transform: "log1p_then_universe_share"
@@ -150,10 +160,11 @@ notebooks/          Research IC only — never product claims
 ### Non-negotiables
 
 1. Fixture/live interface identical (no rewrite at switch).  
-2. Forward-ingest bootstrap; scores trustworthy after ≥7 days.  
-3. Scoring has **no I/O** — unit-testable pure functions.  
-4. Required tests: `test_shrinkage_continuity`, `test_no_two_score_processes`, fixture configs assert `placeholder: true`.  
-5. Before parameter freeze: publish `(V,Q,M,S)` correlation matrix and tilt’s variance share of Final Standing (methodology appendix).
+2. Backfill social history where possible (Bluesky); forward-ingest bootstrap only for sources without history (Reddit/ST).  
+3. Parallel attention proxies (Wikipedia pageviews) before betting on social density.  
+4. Scoring has **no I/O** — unit-testable pure functions; NLP on archive corpora.  
+5. Required tests: `test_shrinkage_continuity`, `test_no_two_score_processes`, fixture configs assert `placeholder: true`.  
+6. Before parameter freeze: publish `(V,Q,M,S)` correlation matrix and tilt’s variance share of Final Standing (methodology appendix).
 
 ---
 
@@ -161,7 +172,7 @@ notebooks/          Research IC only — never product claims
 
 ### Phase 0 — Concept freeze
 
-- Ratify modular review + this plan  
+- Ratify modular review + this plan + [datenbeschaffung.md](./datenbeschaffung.md)  
 - Confirm non-commercial research-demo posture  
 - Name shortlist + trademark search  
 - Legal review gate before any EU public distribution (MAR)
@@ -187,12 +198,15 @@ notebooks/          Research IC only — never product claims
 - Methodology page (`score_kind`, literature, non-advice)  
 - Snapshot browser with version stamps
 
-### Phase 4 — Optional live market + bootstrap social
+### Phase 4 — Open attention procurement (replaces “wait and record”)
 
-- Finnhub market provider behind same interface  
-- If Reddit OAuth approved (non-commercial): forward ingest only  
+- **Bluesky backfill** behind `SocialProvider` (search-with-date-range for ticker mentions; full-repo only if needed)  
+- **Wikipedia pageviews** as parallel attention proxy (Wikidata ticker→article map)  
+- Sentiment lexicon/classifier on public Reddit/StockTwits archive corpora  
+- Finnhub market provider (+ optional SEC EDGAR XBRL) behind same interfaces  
+- Reddit OAuth / RFR as methodology bonus only — not a product feed  
 - StockTwits live remains blocked pending Firestream/ToS  
-- Run research-IC notebook after ≥7 days continuous social data
+- Research-IC notebook on multi-month Bluesky / multi-year Wikipedia series
 
 ### Phase 5 — Empirical calibration (pre-freeze)
 
@@ -250,11 +264,12 @@ Checked framing vs **Art. 20 MAR + DelVO (EU) 2016/958** (July 2026 understandin
 
 ## 11. Open items needing explicit approval
 
-1. Confirm v1 = **non-commercial research demo** (fixtures + optional Finnhub market; social simulated).  
-2. Product name + trademark search.  
-3. Target size 400 vs 500 — driven by **≥30 names/sector**, not vanity headcount.  
-4. Legal MAR review **before** any public EU distribution.  
-5. Whether to pursue Reddit OAuth (non-commercial) and/or StockTwits Firestream for post-v1 live social.
+1. Confirm procurement order: **Bluesky backfill → Wikipedia parallel → NLP on archives → Reddit/RFR as bonus**.  
+2. Confirm v1 = **non-commercial research demo** (Reddit/ST fixtures; Bluesky + Wikipedia open).  
+3. Product name + trademark search.  
+4. Target size 400 vs 500 — driven by **≥30 names/sector**, not vanity headcount.  
+5. Legal MAR review **before** any public EU distribution.  
+6. Whether to pursue Reddit OAuth / RFR and/or StockTwits Firestream as post-v1 live social (bonus, not blocker).
 
 ---
 
@@ -263,7 +278,7 @@ Checked framing vs **Art. 20 MAR + DelVO (EU) 2016/958** (July 2026 understandin
 - Researchers can explain Final Standing from Base + Tilt without reading code  
 - Share of ranked rows with complete V/Q/M and sector occupancy ≥30  
 - Attention-only / maxed-tilt rows stay rare under default params  
-- Time-to-first meaningful heat read after bootstrap ≥7 days  
+- Multi-month Bluesky and/or multi-year Wikipedia series available before parameter freeze  
 - Zero accidental Buy-semantics regressions in UI copy checks  
 - Parameter freeze only after published `(V,Q,M,S)` correlation appendix  
 
@@ -276,5 +291,5 @@ Checked framing vs **Art. 20 MAR + DelVO (EU) 2016/958** (July 2026 understandin
 3. Implement `domain/scoring/` pure functions + required tests.  
 4. Build fixture social/market providers behind the shared interfaces.  
 5. Wire Standing + Heat UI with methodology/non-advice framing.  
-6. Optional: Finnhub market live behind `MarketProvider`.  
+6. Bluesky backfill + Wikipedia pageviews providers; Finnhub / EDGAR behind market interface.  
 7. Schedule legal + ToS reviews before any public distribution.
