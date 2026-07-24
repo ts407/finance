@@ -31,27 +31,40 @@ def prior_reject_summary() -> list[dict[str, Any]]:
     ]
 
 
-def default_perturbations(*, fine: bool = False) -> list[tuple[str, dict[str, Any]]]:
-    coarse = [
-        ("shrinkage.k=15", {"shrinkage.k": 15}),
-        ("shrinkage.k=20", {"shrinkage.k": 20}),
-        ("sparse_below=8", {"shrinkage.display_badges.sparse_below": 8}),
-        ("tilt_max=8", {"social_tilt.tilt_max": 8}),
-        ("tilt_max=6", {"social_tilt.tilt_max": 6}),
-        ("beta=1.0", {"social_tilt.beta": 1.0}),
-    ]
-    if not fine:
-        return coarse
-    return coarse + [
-        ("tilt_max=9.5", {"social_tilt.tilt_max": 9.5}),
-        ("tilt_max=9", {"social_tilt.tilt_max": 9}),
-        ("tilt_max=8.5", {"social_tilt.tilt_max": 8.5}),
-        ("beta=1.4", {"social_tilt.beta": 1.4}),
-        ("beta=1.3", {"social_tilt.beta": 1.3}),
-        ("beta=1.2", {"social_tilt.beta": 1.2}),
-        ("dampener=0.40", {"social_tilt.dampener_neg_share_pivot": 0.40}),
-        ("source_cap=0.40", {"social_pipeline.source_cap_per_ticker_day": 0.40}),
-    ]
+SOCIAL_PATH_PREFIXES = (
+    "social_tilt.",
+    "shrinkage.",
+    "social_pipeline.",
+)
+
+TRACK_M_PERTURBATIONS = [
+    ("winsorize_tighter", {"base.winsorize.lower": 0.02, "base.winsorize.upper": 0.98}),
+    ("winsorize_looser", {"base.winsorize.lower": 0.005, "base.winsorize.upper": 0.995}),
+    ("momentum_weight_up", {"base.pillar_weights.value": 0.30, "base.pillar_weights.quality": 0.30, "base.pillar_weights.momentum": 0.40}),
+    ("value_weight_up", {"base.pillar_weights.value": 0.40, "base.pillar_weights.quality": 0.30, "base.pillar_weights.momentum": 0.30}),
+    ("quality_weight_up", {"base.pillar_weights.value": 0.30, "base.pillar_weights.quality": 0.40, "base.pillar_weights.momentum": 0.30}),
+    ("min_cap_2e9", {"universe.min_market_cap_usd": 2.0e9}),
+    ("min_adv_1e7", {"universe.min_adv_usd_20d": 1.0e7}),
+]
+
+
+def is_social_override(overrides: dict[str, Any]) -> bool:
+    return any(
+        any(path.startswith(prefix) for prefix in SOCIAL_PATH_PREFIXES)
+        for path in overrides
+    )
+
+
+def default_perturbations(*, fine: bool = False, track: str = "M") -> list[tuple[str, dict[str, Any]]]:
+    """
+    Sensitivity grid for the active track.
+
+    Track S (Social) returns an empty grid — Social hypotheses are locked.
+    Track M uses V/Q/M / universe / winsorize levers only.
+    """
+    if track.upper() == "S":
+        return []
+    return list(TRACK_M_PERTURBATIONS)
 
 
 def formulate_hypotheses(
@@ -61,22 +74,38 @@ def formulate_hypotheses(
     baseline: dict[str, Any],
     sensitivity: list[SensitivityResult] | list[dict[str, Any]],
     max_turnover_gate: float = 0.40,
+    track: str = "M",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Build shadow-ready + deferred hypothesis specs from baseline + sensitivity.
 
-    Cycle ≥2 learns from prior rejects: prefer finer levers with offline turnover
-    strictly below the vergleich ranking-turnover gate.
+    Track M only: Social overrides are rejected. Prefer market levers under the
+    offline turnover safety margin.
     """
     from standing.optimization.paths import HYPOTHESES_DIR
+
+    if track.upper() == "S":
+        return [], [
+            {
+                "hypothesis_id": "H-SOCIAL-LOCKED",
+                "reason": (
+                    "Track S locked: no Social score hypotheses until live density "
+                    "feasibility (n distribution / sparse_share) exists."
+                ),
+                "overrides": {},
+            }
+        ]
 
     rows: list[dict[str, Any]] = []
     for item in sensitivity:
         if isinstance(item, SensitivityResult):
+            change = item.change
+            if is_social_override(change):
+                continue
             rows.append(
                 {
                     "label": item.label,
-                    "change": item.change,
+                    "change": change,
                     "ranking_turnover_vs_baseline": item.ranking_turnover_vs_baseline,
                     "spearman_final_vs_base": item.spearman_final_vs_base,
                     "mean_abs_tilt": item.mean_abs_tilt,
@@ -84,6 +113,8 @@ def formulate_hypotheses(
                 }
             )
         else:
+            if is_social_override(item.get("change") or {}):
+                continue
             rows.append(item)
 
     existing_ids: set[str] = set()
@@ -110,27 +141,20 @@ def formulate_hypotheses(
             existing_ids.add(str(hid))
 
     base_spearman = float(baseline["spearman_final_vs_composite"])
-    base_tilt = float(baseline["mean_abs_tilt"])
 
-    # Offline selection uses a safety margin: multi-day shadow turnover tends to
-    # run ~20% higher than single-day sensitivity on fixtures.
+    # Offline selection uses a safety margin vs multi-day shadow turnover.
     offline_gate = max_turnover_gate * 0.75
     gated = [
         r
         for r in rows
         if r["ranking_turnover_vs_baseline"] <= offline_gate
-        and r["spearman_final_vs_base"] > base_spearman
-        and r["mean_abs_tilt"] < base_tilt
-        and r["ranking_turnover_vs_baseline"] > 0.05
-        and not any(
-            (p, repr(v)) in tested_overrides for p, v in r["change"].items()
-        )
+        and not any((p, repr(v)) in tested_overrides for p, v in r["change"].items())
     ]
-    # Prefer lower turnover first (stability), then higher composite alignment lift
+    # Prefer modest turnover (stable) then larger composite shift as secondary
     gated.sort(
         key=lambda r: (
             r["ranking_turnover_vs_baseline"],
-            -(r["spearman_final_vs_base"] - base_spearman),
+            -abs(r["spearman_final_vs_base"] - base_spearman),
         )
     )
 
@@ -147,78 +171,77 @@ def formulate_hypotheses(
 
     seq = 1
     ready: list[dict[str, Any]] = []
-    used_paths: set[str] = set()
+    used_labels: set[str] = set()
 
-    for prefer_prefix in ("tilt_max=", "beta="):
-        for r in gated:
-            if not r["label"].startswith(prefer_prefix):
-                continue
-            path = next(iter(r["change"]))
-            if path in used_paths:
-                continue
+    # Track M: take up to two lowest-turnover untested market levers
+    for r in gated:
+        if r["label"] in used_labels:
+            continue
+        if is_social_override(r["change"]):
+            continue
+        hid, seq = alloc_id(seq)
+        ready.append(
+            {
+                "hypothesis_id": hid,
+                "basis": (
+                    f"Track M cycle {cycle_id}: Social locked. Offline {r['label']} "
+                    f"turnover={r['ranking_turnover_vs_baseline']:.1%} under safety gate "
+                    f"{offline_gate:.0%}. Evaluate with forward-return apparatus "
+                    f"(see standing track-m-calibrate / σ_IC)."
+                ),
+                "overrides": dict(r["change"]),
+                "prediction": {
+                    "metric": "mean_forward_spearman_lift",
+                    "expected_direction": "non_negative_with_ci",
+                    "secondary_metric": "ranking_turnover_vs_baseline",
+                    "expected_secondary": f"below_{max_turnover_gate:.0%}_gate",
+                    "rationale": f"{r['label']} — Track M market lever (no Social).",
+                    "track": "M",
+                },
+            }
+        )
+        used_labels.add(r["label"])
+        if len(ready) >= 2:
+            break
+
+    if not ready:
+        # Fallback: any untested non-social row, lowest turnover
+        candidates = [
+            r
+            for r in rows
+            if not is_social_override(r["change"])
+            and not any((p, repr(v)) in tested_overrides for p, v in r["change"].items())
+        ]
+        candidates.sort(key=lambda r: r["ranking_turnover_vs_baseline"])
+        for r in candidates[:2]:
             hid, seq = alloc_id(seq)
             ready.append(
                 {
                     "hypothesis_id": hid,
                     "basis": (
-                        f"Cycle {cycle_id}: prior cycles rejected aggressive cuts on turnover "
-                        f"and/or lacked forward-return evidence. Offline {r['label']} stays under "
-                        f"safety gate {offline_gate:.0%} "
-                        f"(turnover={r['ranking_turnover_vs_baseline']:.1%}) with lower mean|tilt| "
-                        f"({base_tilt:.2f}→{r['mean_abs_tilt']:.2f}); evaluate via next-weekday "
-                        f"ret_1m forward proxy in shadow/vergleich."
+                        f"Track M cycle {cycle_id}: fallback {r['label']} "
+                        f"(turnover={r['ranking_turnover_vs_baseline']:.1%})."
                     ),
                     "overrides": dict(r["change"]),
                     "prediction": {
                         "metric": "mean_forward_spearman_lift",
                         "expected_direction": "non_negative_with_ci",
                         "secondary_metric": "ranking_turnover_vs_baseline",
-                        "expected_secondary": f"below_{max_turnover_gate:.0%}_gate",
-                        "rationale": (
-                            f"{r['label']} — conservative untested step for forward-proxy eval."
-                        ),
-                    },
-                }
-            )
-            used_paths.add(path)
-            break
-
-    if not ready:
-        improvers = [
-            r
-            for r in rows
-            if r["spearman_final_vs_base"] > base_spearman and r["mean_abs_tilt"] < base_tilt
-        ]
-        improvers.sort(key=lambda r: r["ranking_turnover_vs_baseline"])
-        for r in improvers[:2]:
-            hid, seq = alloc_id(seq)
-            ready.append(
-                {
-                    "hypothesis_id": hid,
-                    "basis": (
-                        f"Cycle {cycle_id}: fallback candidate {r['label']} "
-                        f"(turnover={r['ranking_turnover_vs_baseline']:.1%})."
-                    ),
-                    "overrides": dict(r["change"]),
-                    "prediction": {
-                        "metric": "ranking_turnover_vs_baseline",
-                        "expected_direction": "minimize",
-                        "secondary_metric": "spearman_final_vs_composite",
-                        "expected_secondary": "increase",
+                        "expected_secondary": "observe",
                         "rationale": r["label"],
+                        "track": "M",
                     },
                 }
             )
 
     deferred = [
         {
-            "hypothesis_id": "H20260722-01",
+            "hypothesis_id": "H-SOCIAL-LOCKED",
             "reason": (
-                "shrinkage.k increases remain deferred on fixture mean_n≫k "
-                f"(mean_n={float(baseline.get('mean_n', float('nan'))):.0f}); "
-                "revisit with sparse live Social."
+                "Track S locked: no Social score hypotheses until live Social density "
+                "feasibility exists (no backfill). Prior k/tilt/beta Social shadows stay archived."
             ),
-            "overrides": {"shrinkage.k": 15},
+            "overrides": {},
         }
     ]
     return ready, deferred

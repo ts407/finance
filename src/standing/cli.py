@@ -404,6 +404,48 @@ def cmd_loop_vergleich(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_track_m_calibrate(args: argparse.Namespace) -> int:
+    """Track M: validate IC apparatus on multi-year OHLCV momentum."""
+    from standing.optimization.log import append_log
+    from standing.research.momentum_calibrate import run_momentum_calibration
+
+    console.print(
+        "[bold]track-m-calibrate[/bold] — multi-year OHLCV momentum IC / σ_IC "
+        f"(horizon={args.horizon_days}d, network={not args.offline})"
+    )
+    report = run_momentum_calibration(
+        horizon_days=args.horizon_days,
+        allow_network=not args.offline,
+    )
+    status = report.get("status")
+    product = report.get("product_momentum_v2") or {}
+    power = report.get("sigma_ic_for_power") or {}
+    console.print(f"status={status}  apparatus_passed={report.get('apparatus_check', {}).get('passed')}")
+    if product:
+        console.print(
+            f"product_momentum_v2: μ_IC={product.get('mean_ic')}  "
+            f"σ_IC={product.get('sigma_ic')}  t={product.get('tstat')}  "
+            f"n={product.get('n_ic_obs')}  T_80%={product.get('power_days_80')}"
+        )
+    console.print(f"power sizing: {power}")
+    console.print(f"report: {report.get('report_path')}")
+    append_log(
+        {
+            "phase": "track-m-calibrate",
+            "track": "M",
+            "decision": status,
+            "apparatus_passed": report.get("apparatus_check", {}).get("passed"),
+            "product_momentum_v2": product,
+            "sigma_ic_for_power": power,
+            "report_path": report.get("report_path"),
+            "handoff": "loop-analyse-hypothese",
+            "social_locked": True,
+            "productive_config_unchanged": True,
+        }
+    )
+    return 0 if status != "failed_empty_panel" else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -484,6 +526,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Hypothesis ID (repeatable). Default: H20260722-03 H20260722-04",
     )
     lv.set_defaults(func=cmd_loop_vergleich)
+
+    tm = sub.add_parser(
+        "track-m-calibrate",
+        help="Track M: calibrate IC apparatus on multi-year OHLCV momentum",
+    )
+    tm.add_argument("--horizon-days", type=int, default=21, help="Forward return horizon")
+    tm.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use only cached/cassette OHLCV (no network fetch)",
+    )
+    tm.set_defaults(func=cmd_track_m_calibrate)
 
     return p
 

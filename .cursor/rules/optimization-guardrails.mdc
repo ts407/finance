@@ -18,3 +18,17 @@ alwaysApply: true
   aber nicht automatisch score-wirksame Evaluationsbasis ein. Tagebuch-Einträge
   dienen ausschließlich als qualitative Referenz bei manueller Freigabe, nie als
   automatischer Trainings- oder Score-Input.
+
+## Zwei Spuren (Track M / Track S)
+
+- **Spur M (Markt/V/Q/M)** darf und soll echte Loop-Zyklen fahren: Momentum-Definition,
+  Lookbacks, Winsorisierung, Peer-Gruppen, Aufnahmeschwellen — auf historischem OHLCV
+  (und Fundamentals, sobald vorhanden). Social-Bezug ist in Spur-M-Hypothesen verboten.
+- **Spur S (Social)** ist analytisch gesperrt, solange keine Live-Social-Daten mit
+  messbarer Dichte existieren. Backfill ist ausgeschlossen. Zulässig ist nur
+  Machbarkeits-Logging (n-Verteilung, sparse_share, Ticker-Zuordnung), keine
+  Score-/Trainings-Hypothesen und kein Shadow auf Social-Parametern.
+- Die Evaluationskette muss zuerst gegen ein bekanntes Marktsignal (Momentum) geeicht
+  werden (`standing track-m-calibrate`), bevor sie auf schwache/teure Signale angesetzt wird.
+- `σ_IC` und daraus `T ≈ (2.80 · σ_IC / μ_IC)²` sind empirisch aus Spur M zu bestimmen;
+  Social-Fensterlänge wird nicht auf Literaturannahmen festgelegt.

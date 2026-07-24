@@ -14,4 +14,8 @@ artifacts/*
 artifacts/optimization/baseline/standings_*.csv
 artifacts/optimization/baseline/standings_*.meta.json
 artifacts/optimization/shadow/**/capture_*.csv
+!artifacts/research/
+!artifacts/research/**
+artifacts/market/
+artifacts/research/**/*.csv
 .DS_Store

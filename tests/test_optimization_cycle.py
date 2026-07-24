@@ -3,28 +3,20 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from standing.optimization.cycle import formulate_hypotheses, next_cycle_id
+from standing.optimization.cycle import formulate_hypotheses, is_social_override
 
 
-def test_next_cycle_id(tmp_path: Path, monkeypatch):
-    log = tmp_path / "loop_log.jsonl"
-    log.write_text(
-        '{"cycle_id":"C20260722-01","phase":"x"}\n'
-        '{"cycle_id":"C20260722-01","phase":"y"}\n'
-    )
-    monkeypatch.setattr("standing.optimization.log.LOOP_LOG_PATH", log)
-    assert next_cycle_id(date(2026, 7, 22)) == "C20260722-02"
+def test_social_override_detection():
+    assert is_social_override({"social_tilt.tilt_max": 8})
+    assert is_social_override({"shrinkage.k": 15})
+    assert not is_social_override({"base.winsorize.lower": 0.02})
 
 
-def test_formulate_prefers_gated_fine_steps(tmp_path: Path, monkeypatch):
+def test_formulate_track_m_skips_social(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("standing.optimization.paths.HYPOTHESES_DIR", tmp_path / "hyp")
     (tmp_path / "hyp").mkdir()
-    (tmp_path / "hyp" / "H20260722-03.yaml").write_text("id: H20260722-03\n")
-    (tmp_path / "hyp" / "H20260722-04.yaml").write_text("id: H20260722-04\n")
     log = tmp_path / "loop_log.jsonl"
-    log.write_text(
-        '{"phase":"loop-vergleich-entscheidung","decision":"reject","hypothesis_id":"H20260722-03"}\n'
-    )
+    log.write_text("")
     monkeypatch.setattr("standing.optimization.log.LOOP_LOG_PATH", log)
 
     baseline = {
@@ -34,46 +26,53 @@ def test_formulate_prefers_gated_fine_steps(tmp_path: Path, monkeypatch):
     }
     sensitivity = [
         {
-            "label": "tilt_max=8",
-            "change": {"social_tilt.tilt_max": 8},
-            "ranking_turnover_vs_baseline": 0.52,
-            "spearman_final_vs_base": 0.95,
-            "mean_abs_tilt": 4.5,
-            "tilt_vs_baseline_mae": 1.0,
-        },
-        {
-            "label": "tilt_max=8.5",
-            "change": {"social_tilt.tilt_max": 8.5},
-            "ranking_turnover_vs_baseline": 0.39,
-            "spearman_final_vs_base": 0.941,
-            "mean_abs_tilt": 4.87,
-            "tilt_vs_baseline_mae": 0.8,
-        },
-        {
             "label": "tilt_max=9",
             "change": {"social_tilt.tilt_max": 9},
-            "ranking_turnover_vs_baseline": 0.28,
-            "spearman_final_vs_base": 0.936,
-            "mean_abs_tilt": 5.16,
+            "ranking_turnover_vs_baseline": 0.1,
+            "spearman_final_vs_base": 0.93,
+            "mean_abs_tilt": 5.0,
             "tilt_vs_baseline_mae": 0.5,
         },
         {
-            "label": "beta=1.3",
-            "change": {"social_tilt.beta": 1.3},
-            "ranking_turnover_vs_baseline": 0.26,
-            "spearman_final_vs_base": 0.933,
-            "mean_abs_tilt": 5.25,
-            "tilt_vs_baseline_mae": 0.4,
+            "label": "winsorize_tighter",
+            "change": {"base.winsorize.lower": 0.02, "base.winsorize.upper": 0.98},
+            "ranking_turnover_vs_baseline": 0.12,
+            "spearman_final_vs_base": 0.921,
+            "mean_abs_tilt": 5.7,
+            "tilt_vs_baseline_mae": 0.0,
+        },
+        {
+            "label": "momentum_weight_up",
+            "change": {
+                "base.pillar_weights.value": 0.30,
+                "base.pillar_weights.quality": 0.30,
+                "base.pillar_weights.momentum": 0.40,
+            },
+            "ranking_turnover_vs_baseline": 0.15,
+            "spearman_final_vs_base": 0.91,
+            "mean_abs_tilt": 5.7,
+            "tilt_vs_baseline_mae": 0.0,
         },
     ]
     ready, deferred = formulate_hypotheses(
-        cycle_id="C20260722-02",
+        cycle_id="C20260722-04",
         as_of=date(2026, 7, 22),
         baseline=baseline,
         sensitivity=sensitivity,
+        track="M",
     )
-    assert len(ready) == 2
-    assert ready[0]["overrides"] == {"social_tilt.tilt_max": 9}
-    assert ready[1]["overrides"] == {"social_tilt.beta": 1.3}
-    assert ready[0]["hypothesis_id"] not in {"H20260722-03", "H20260722-04"}
-    assert deferred[0]["hypothesis_id"] == "H20260722-01"
+    assert all(not is_social_override(h["overrides"]) for h in ready)
+    assert ready[0]["overrides"] != {"social_tilt.tilt_max": 9}
+    assert deferred[0]["hypothesis_id"] == "H-SOCIAL-LOCKED"
+
+
+def test_formulate_track_s_locked():
+    ready, deferred = formulate_hypotheses(
+        cycle_id="C-TEST",
+        as_of=date(2026, 7, 22),
+        baseline={"spearman_final_vs_composite": 0.9, "mean_abs_tilt": 5.0, "mean_n": 10},
+        sensitivity=[],
+        track="S",
+    )
+    assert ready == []
+    assert deferred[0]["hypothesis_id"] == "H-SOCIAL-LOCKED"

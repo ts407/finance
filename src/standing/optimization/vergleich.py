@@ -133,14 +133,33 @@ def decide_from_shadow(
     turnover_ci = _bootstrap_mean_ci(daily["ranking_turnover_vs_productive"].to_numpy())
     tilt_delta = float(agg["mean_abs_tilt_shadow"]) - float(agg["mean_abs_tilt_productive"])
 
+    # Track M (no Social change): tilt is unchanged — do not require tilt decrease.
+    change = shadow_report.get("change") or []
+    social_change = False
+    for c in change:
+        if isinstance(c, dict) and str(c.get("path", "")).startswith(
+            ("social_tilt.", "shrinkage.", "social_pipeline.")
+        ):
+            social_change = True
+            break
+    require_tilt = thresholds.require_tilt_decrease and social_change
+
     fwd_spearman_lifts = np.asarray(
         forward.get("daily_forward_spearman_lift")
-        or ([agg.get("mean_forward_spearman_lift", float("nan"))] if "mean_forward_spearman_lift" in agg else []),
+        or (
+            [agg.get("mean_forward_spearman_lift", float("nan"))]
+            if "mean_forward_spearman_lift" in agg
+            else []
+        ),
         dtype=float,
     )
     fwd_excess_lifts = np.asarray(
         forward.get("daily_top_decile_excess_lift")
-        or ([agg.get("mean_top_decile_excess_lift", float("nan"))] if "mean_top_decile_excess_lift" in agg else []),
+        or (
+            [agg.get("mean_top_decile_excess_lift", float("nan"))]
+            if "mean_top_decile_excess_lift" in agg
+            else []
+        ),
         dtype=float,
     )
     fwd_spearman_ci = _bootstrap_mean_ci(fwd_spearman_lifts, seed=43)
@@ -151,11 +170,11 @@ def decide_from_shadow(
     checks = {
         "turnover_le_max": float(agg["mean_ranking_turnover_vs_productive"])
         <= thresholds.max_mean_ranking_turnover,
-        "tilt_decreased": (tilt_delta < 0) if thresholds.require_tilt_decrease else True,
+        "tilt_decreased": (tilt_delta < 0) if require_tilt else True,
         "forward_evidence": forward_evidence if thresholds.require_forward_evidence else True,
-        # Informational / legacy composite checks (not required for accept_candidate)
         "spearman_lift_ge_min": spearman_lift >= thresholds.min_spearman_lift,
         "lift_ci_excludes_zero": lift_ci["ci_low"] > 0,
+        "track_m_social_unchanged": not social_change,
     }
     if gap is not None:
         checks["social_gap_not_worse"] = gap["shadow_turnover_full_vs_gap"] <= (

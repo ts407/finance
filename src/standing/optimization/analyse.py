@@ -183,7 +183,7 @@ def write_baseline_report(
         snap,
         cfg=cfg,
         history_days=history_days,
-        perturbations=default_perturbations(fine=fine_sensitivity),
+        perturbations=default_perturbations(fine=fine_sensitivity, track="M"),
     )
     cid = cycle_id or next_cycle_id(as_of)
 
