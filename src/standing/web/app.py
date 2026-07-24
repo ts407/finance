@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 
 from standing.config import load_scoring_config
 from standing.pipeline.snapshot import StandingSnapshot, run_snapshot
-from standing.providers import FixtureMarketProvider, FixtureSocialProvider
+from standing.providers import SOCIAL_MODES, build_market_provider, build_social_provider
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -119,16 +120,21 @@ def _parse_as_of(value: str | None) -> date:
 
 
 @lru_cache(maxsize=32)
-def _cached_snapshot(as_of_iso: str, history_days: int) -> dict[str, Any]:
+def _cached_snapshot(as_of_iso: str, history_days: int, social_mode: str) -> dict[str, Any]:
     as_of = date.fromisoformat(as_of_iso)
     cfg = load_scoring_config()
     snap = run_snapshot(
         as_of=as_of,
-        market=FixtureMarketProvider(),
-        social=FixtureSocialProvider(history_days=history_days),
+        market=build_market_provider(),
+        social=build_social_provider(social_mode, history_days=history_days),
         cfg=cfg,
     )
     return _serialize(snap)
+
+
+def _default_social_mode() -> str:
+    mode = os.environ.get("STANDING_SOCIAL", "fixture").strip().lower()
+    return mode if mode in SOCIAL_MODES else "fixture"
 
 
 def _serialize(snap: StandingSnapshot) -> dict[str, Any]:
@@ -241,7 +247,10 @@ def _methodology_payload() -> dict[str, Any]:
             "momentum_led",
             "attention_confirmed",
         ],
-        "source_posture": "fixture market · fixture social · live social later after approval/Firestream",
+        "source_posture": (
+            "fixture market · social selectable via STANDING_SOCIAL="
+            f"{'/'.join(SOCIAL_MODES)} (default fixture; open = wikipedia+bluesky)"
+        ),
     }
 
 
@@ -279,7 +288,7 @@ def create_app() -> FastAPI:
         limit: int | None = Query(default=None, ge=1, le=500),
     ) -> dict[str, Any]:
         day = _parse_as_of(as_of)
-        payload = _cached_snapshot(day.isoformat(), history_days)
+        payload = _cached_snapshot(day.isoformat(), history_days, _default_social_mode())
         standings, heat, _key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -303,7 +312,7 @@ def create_app() -> FastAPI:
         limit: int | None = Query(default=None, ge=1, le=500),
     ) -> StreamingResponse:
         day = _parse_as_of(as_of)
-        payload = _cached_snapshot(day.isoformat(), history_days)
+        payload = _cached_snapshot(day.isoformat(), history_days, _default_social_mode())
         standings, _heat, _key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -334,7 +343,7 @@ def create_app() -> FastAPI:
         history_days: int = Query(default=14, ge=7, le=60),
     ) -> dict[str, Any]:
         day = _parse_as_of(as_of)
-        payload = _cached_snapshot(day.isoformat(), history_days)
+        payload = _cached_snapshot(day.isoformat(), history_days, _default_social_mode())
         match = next(
             (r for r in payload["standings"] if str(r["ticker"]).upper() == ticker.upper()),
             None,

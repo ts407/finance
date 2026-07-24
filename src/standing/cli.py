@@ -10,7 +10,7 @@ from rich.table import Table
 from standing.config import load_scoring_config
 from standing.pipeline.report import render_html_report
 from standing.pipeline.snapshot import persist_snapshot, run_snapshot
-from standing.providers import FixtureMarketProvider, FixtureSocialProvider
+from standing.providers import SOCIAL_MODES, build_market_provider, build_social_provider
 
 console = Console()
 
@@ -21,15 +21,23 @@ def _parse_date(value: str | None) -> date:
     return datetime.strptime(value, "%Y-%m-%d").date()
 
 
+def _providers(args: argparse.Namespace):
+    return (
+        build_market_provider(),
+        build_social_provider(getattr(args, "social", "fixture"), history_days=args.history_days),
+    )
+
+
 def cmd_score(args: argparse.Namespace) -> int:
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     if not cfg.placeholder:
         console.print("[yellow]Warning:[/yellow] placeholder is false — verify empirical freeze.")
     as_of = _parse_date(args.as_of)
+    market, social = _providers(args)
     snap = run_snapshot(
         as_of=as_of,
-        market=FixtureMarketProvider(),
-        social=FixtureSocialProvider(history_days=args.history_days),
+        market=market,
+        social=social,
         cfg=cfg,
     )
     out = Path(args.out)
@@ -37,7 +45,7 @@ def cmd_score(args: argparse.Namespace) -> int:
     console.print(
         f"[bold]Final Standing snapshot[/bold]  as_of={snap.as_of}  "
         f"universe={snap.universe_id}  n={len(snap.standings)}  "
-        f"score_kind={snap.score_kind}"
+        f"score_kind={snap.score_kind}  social={snap.meta.get('social_provider')}"
     )
     console.print(f"Wrote {path}")
     if snap.meta["low_confidence_sectors"]:
@@ -52,10 +60,11 @@ def cmd_score(args: argparse.Namespace) -> int:
 def cmd_table(args: argparse.Namespace) -> int:
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     as_of = _parse_date(args.as_of)
+    market, social = _providers(args)
     snap = run_snapshot(
         as_of=as_of,
-        market=FixtureMarketProvider(),
-        social=FixtureSocialProvider(history_days=args.history_days),
+        market=market,
+        social=social,
         cfg=cfg,
     )
     top = snap.standings.head(args.top)
@@ -63,7 +72,7 @@ def cmd_table(args: argparse.Namespace) -> int:
     table = Table(
         title=(
             f"Final Standing (editorial_descriptive) — {snap.as_of} "
-            f"[placeholder={snap.placeholder}]"
+            f"[placeholder={snap.placeholder}] social={snap.meta.get('social_provider')}"
         )
     )
     for col in (
@@ -107,15 +116,21 @@ def cmd_heat(args: argparse.Namespace) -> int:
     """Attention board — primary heat surface, separate from composite."""
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     as_of = _parse_date(args.as_of)
+    market, social = _providers(args)
     snap = run_snapshot(
         as_of=as_of,
-        market=FixtureMarketProvider(),
-        social=FixtureSocialProvider(history_days=args.history_days),
+        market=market,
+        social=social,
         cfg=cfg,
     )
     heat = snap.standings.sort_values("s_used", ascending=False).head(args.top)
 
-    table = Table(title=f"Attention Heat Board — {snap.as_of}  (loud ≠ good)")
+    table = Table(
+        title=(
+            f"Attention Heat Board — {snap.as_of}  (loud ≠ good)  "
+            f"social={snap.meta.get('social_provider')}"
+        )
+    )
     for col in ("ticker", "s_obs", "s_used", "n", "confidence_c", "neg_share", "attention_tilt", "final_standing", "social_badge"):
         table.add_column(col, justify="right" if col != "ticker" and col != "social_badge" else "left")
     for _, row in heat.iterrows():
@@ -138,10 +153,11 @@ def cmd_heat(args: argparse.Namespace) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     cfg = load_scoring_config(Path(args.config) if args.config else None)
     as_of = _parse_date(args.as_of)
+    market, social = _providers(args)
     snap = run_snapshot(
         as_of=as_of,
-        market=FixtureMarketProvider(),
-        social=FixtureSocialProvider(history_days=args.history_days),
+        market=market,
+        social=social,
         cfg=cfg,
     )
     out = Path(args.out)
@@ -179,6 +195,15 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--as-of", default=None, help="YYYY-MM-DD (default: today)")
         sp.add_argument("--history-days", type=int, default=14)
+        sp.add_argument(
+            "--social",
+            default="fixture",
+            choices=list(SOCIAL_MODES),
+            help=(
+                "Social/attention provider: fixture (CI default), wikipedia, bluesky, "
+                "open (wiki+bluesky), all (fixture+open)"
+            ),
+        )
 
     s = sub.add_parser("score", help="Compute and persist a standing snapshot")
     add_common(s)

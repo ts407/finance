@@ -21,8 +21,11 @@ shrinkage:
   display_badges: { sparse_below: 5, ok_at: 15 }
 
 social_pipeline:
-  sources: [reddit, stocktwits]  # fixture sources; Bluesky = open backfill path (see docs/datenbeschaffung.md)
-  # planned: sources include bluesky; attention_proxies: [wikipedia_pageviews]
+  sources: [reddit, stocktwits]  # fixture sources wired today
+  attention_proxies: [wikipedia_pageviews]
+  planned_live_sources: [bluesky]
+  # CLI: standing table --social fixture|wikipedia|bluesky|open|all
+  # Web: STANDING_SOCIAL=open
   include_wsb: true
   source_cap_per_ticker_day: 0.50
   mention_transform: "log1p_then_universe_share"

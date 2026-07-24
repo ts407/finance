@@ -119,4 +119,22 @@ Universitäres Umfeld öffnet Wege, die kommerziell verschlossen sind:
 | Fixtures als einziger gangbarer Social-Pfad | Fixtures bleiben für Reddit/ST und CI; **Bluesky + Wikipedia** sind offene Live-/Historie-Pfade |
 | Social = Echtzeit-Erhebungsproblem | Social = Beschaffungsproblem mit mehreren offenen Wegen |
 
-Fixtures bleiben Pflicht für CI/Reproduzierbarkeit und als Stub, solange Reddit/StockTwits gated sind. Sie sind nicht mehr die einzige strategische Option für Attention.
+## Integration — how to wire the open services
+
+Providers share `SocialProvider.fetch_since` and land in the existing cap → aggregate → tilt path.
+
+| Mode | CLI | Contents |
+|------|-----|----------|
+| `fixture` | default | Reddit/ST stubs (CI) |
+| `wikipedia` | `--social wikipedia` | live pageviews |
+| `bluesky` | `--social bluesky` | live cashtag search (`api.bsky.app`) |
+| `open` | `--social open` | Wikipedia + Bluesky |
+| `all` | `--social all` | fixture + open |
+
+```bash
+standing table --as-of 2026-07-22 --social wikipedia --history-days 14
+standing heat --as-of 2026-07-22 --social open --history-days 30
+STANDING_SOCIAL=open standing serve
+```
+
+Code map: `providers/wikipedia_pageviews.py`, `providers/bluesky.py`, `providers/composite_social.py`, `providers/factory.py`.
