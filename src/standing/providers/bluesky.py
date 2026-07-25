@@ -14,6 +14,7 @@ from typing import Sequence
 import pandas as pd
 
 from standing.providers.base import FetchCursor, ProviderMeta, SocialProvider
+from standing.providers.cache import DiskCache
 from standing.providers.http import JsonFetcher, build_url, get_json
 from standing.providers.market_fixture import FIXTURE_TICKERS
 from standing.providers.schema import empty_social_frame, normalize_social_frame
@@ -59,6 +60,7 @@ class BlueskySocialProvider(SocialProvider, ProviderMeta):
         history_days: int = 14,
         max_posts_per_ticker: int = 100,
         fetcher: JsonFetcher | None = None,
+        cache: DiskCache | None = None,
     ):
         if tickers is None:
             tickers = [t for t, _, _ in FIXTURE_TICKERS]
@@ -66,6 +68,7 @@ class BlueskySocialProvider(SocialProvider, ProviderMeta):
         self._history_days = max(1, int(history_days))
         self._max_posts = max(1, int(max_posts_per_ticker))
         self._fetcher: JsonFetcher = fetcher or (lambda url, headers=None: get_json(url, headers=headers))
+        self._cache = cache
 
     def name(self) -> str:
         return "bluesky-search"
@@ -120,6 +123,20 @@ class BlueskySocialProvider(SocialProvider, ProviderMeta):
         end = cursor.as_of
         start = end - timedelta(days=self._history_days - 1)
 
+        cache_key = (
+            ",".join(self._tickers),
+            start.isoformat(),
+            end.isoformat(),
+            self._max_posts,
+        )
+        if self._cache is not None:
+            cached = self._cache.get_frame("bluesky", *cache_key)
+            if cached is not None:
+                next_cursor = FetchCursor(
+                    as_of=end, token=f"bluesky-cache:{start.isoformat()}:{end.isoformat()}"
+                )
+                return normalize_social_frame(cached), next_cursor
+
         # (ticker, day) → aggregates
         counts: dict[tuple[str, str], int] = defaultdict(int)
         neg_hits: dict[tuple[str, str], list[float]] = defaultdict(list)
@@ -155,5 +172,7 @@ class BlueskySocialProvider(SocialProvider, ProviderMeta):
             )
 
         df = normalize_social_frame(pd.DataFrame(rows) if rows else empty_social_frame())
+        if self._cache is not None:
+            self._cache.set_frame("bluesky", *cache_key, frame=df)
         next_cursor = FetchCursor(as_of=end, token=f"bluesky:{start.isoformat()}:{end.isoformat()}")
         return df, next_cursor

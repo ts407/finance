@@ -13,16 +13,24 @@ def test_web_health_and_snapshot():
     assert body["score_kind"] == "editorial_descriptive"
     assert body["placeholder"] is True
 
-    snap = client.get("/api/snapshot", params={"as_of": "2026-07-22"})
+    snap = client.get(
+        "/api/snapshot",
+        params={"as_of": "2026-07-22", "social": "fixture", "market": "fixture"},
+    )
     assert snap.status_code == 200
     payload = snap.json()
     assert payload["meta"]["universe_id"]
+    assert payload["meta"]["social_mode"] == "fixture"
+    assert payload["meta"]["market_mode"] == "fixture"
     assert len(payload["standings"]) > 0
     assert "final_standing" in payload["standings"][0]
     assert len(payload["heat"]) > 0
 
     ticker = payload["standings"][0]["ticker"]
-    detail = client.get(f"/api/ticker/{ticker}", params={"as_of": "2026-07-22"})
+    detail = client.get(
+        f"/api/ticker/{ticker}",
+        params={"as_of": "2026-07-22", "social": "fixture", "market": "fixture"},
+    )
     assert detail.status_code == 200
     assert detail.json()["row"]["ticker"] == ticker
 
@@ -31,13 +39,18 @@ def test_web_health_and_snapshot():
     assert b"Standing" in index.content
     assert b"Export CSV" in index.content
     assert b'id="preset"' in index.content
+    assert b'id="market"' in index.content
+    assert b'id="social"' in index.content
+
+
+FIXTURE_PARAMS = {"as_of": "2026-07-22", "social": "fixture", "market": "fixture"}
 
 
 def test_web_filter_and_sort():
     client = TestClient(create_app())
     snap = client.get(
         "/api/snapshot",
-        params={"as_of": "2026-07-22", "q": "tech", "sort": "value", "limit": 5},
+        params={**FIXTURE_PARAMS, "q": "tech", "sort": "value", "limit": 5},
     )
     assert snap.status_code == 200
     rows = snap.json()["standings"]
@@ -48,19 +61,19 @@ def test_web_filter_and_sort():
 
 def test_web_sector_and_presets():
     client = TestClient(create_app())
-    base = client.get("/api/snapshot", params={"as_of": "2026-07-22"}).json()
+    base = client.get("/api/snapshot", params=FIXTURE_PARAMS).json()
     sector = next(iter(base["meta"]["sector_counts"]))
 
     by_sector = client.get(
         "/api/snapshot",
-        params={"as_of": "2026-07-22", "sector": sector},
+        params={**FIXTURE_PARAMS, "sector": sector},
     ).json()
     assert by_sector["standings"]
     assert all(r["sector"] == sector for r in by_sector["standings"])
 
     value_led = client.get(
         "/api/snapshot",
-        params={"as_of": "2026-07-22", "preset": "value_led", "limit": 5},
+        params={**FIXTURE_PARAMS, "preset": "value_led", "limit": 5},
     ).json()["standings"]
     assert value_led
     if len(value_led) >= 2:
@@ -68,7 +81,7 @@ def test_web_sector_and_presets():
 
     attention = client.get(
         "/api/snapshot",
-        params={"as_of": "2026-07-22", "preset": "attention_confirmed"},
+        params={**FIXTURE_PARAMS, "preset": "attention_confirmed"},
     ).json()["standings"]
     for row in attention:
         assert row["social_badge"] == "ok"
@@ -79,7 +92,7 @@ def test_web_snapshot_csv():
     client = TestClient(create_app())
     res = client.get(
         "/api/snapshot.csv",
-        params={"as_of": "2026-07-22", "preset": "balanced", "limit": 3},
+        params={**FIXTURE_PARAMS, "preset": "balanced", "limit": 3},
     )
     assert res.status_code == 200
     assert "text/csv" in res.headers["content-type"]

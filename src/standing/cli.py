@@ -10,7 +10,7 @@ from rich.table import Table
 from standing.config import load_scoring_config
 from standing.pipeline.report import render_html_report
 from standing.pipeline.snapshot import persist_snapshot, run_snapshot
-from standing.providers import SOCIAL_MODES, build_market_provider, build_social_provider
+from standing.providers import MARKET_MODES, SOCIAL_MODES, build_market_provider, build_social_provider
 
 console = Console()
 
@@ -23,7 +23,7 @@ def _parse_date(value: str | None) -> date:
 
 def _providers(args: argparse.Namespace):
     return (
-        build_market_provider(),
+        build_market_provider(getattr(args, "market", "fixture")),
         build_social_provider(getattr(args, "social", "fixture"), history_days=args.history_days),
     )
 
@@ -45,7 +45,8 @@ def cmd_score(args: argparse.Namespace) -> int:
     console.print(
         f"[bold]Final Standing snapshot[/bold]  as_of={snap.as_of}  "
         f"universe={snap.universe_id}  n={len(snap.standings)}  "
-        f"score_kind={snap.score_kind}  social={snap.meta.get('social_provider')}"
+        f"score_kind={snap.score_kind}  market={snap.meta.get('market_provider')}  "
+        f"social={snap.meta.get('social_provider')}"
     )
     console.print(f"Wrote {path}")
     if snap.meta["low_confidence_sectors"]:
@@ -195,6 +196,12 @@ def build_parser() -> argparse.ArgumentParser:
     def add_common(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--as-of", default=None, help="YYYY-MM-DD (default: today)")
         sp.add_argument("--history-days", type=int, default=14)
+        sp.add_argument(
+            "--market",
+            default="fixture",
+            choices=list(MARKET_MODES),
+            help="Market provider: fixture | stooq (real OHLCV overlay) | finnhub | live",
+        )
         sp.add_argument(
             "--social",
             default="fixture",

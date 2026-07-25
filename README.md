@@ -23,13 +23,17 @@ See:
 ```bash
 python -m pip install -e ".[dev]"
 pytest
-standing table --as-of 2026-07-22
-standing heat --as-of 2026-07-22
-standing table --as-of 2026-07-22 --social wikipedia   # live Wikipedia pageviews
-standing heat --as-of 2026-07-22 --social open         # Wikipedia + Bluesky
-standing score --as-of 2026-07-22 --out artifacts/snapshots
-standing report --as-of 2026-07-22 --out artifacts/reports/standing.html
-standing serve --host 127.0.0.1 --port 8000            # STANDING_SOCIAL=open for live attention
+
+# Fixture desk (CI / offline)
+standing table --as-of 2026-07-22 --market fixture --social fixture
+
+# Live desk — real Wikipedia attention + Stooq OHLCV (no API key)
+standing table --as-of 2026-07-22 --market stooq --social wikipedia
+standing heat  --as-of 2026-07-22 --market stooq --social open --history-days 14
+
+# Web UI defaults to stooq + wikipedia; dropdowns switch modes
+standing serve --host 127.0.0.1 --port 8000
+# optional: FINNHUB_API_KEY=... for live fundamentals (market=finnhub|live)
 ```
 
 ## Web desk URL map

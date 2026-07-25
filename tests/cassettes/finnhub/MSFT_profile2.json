@@ -1,0 +1,14 @@
+{
+  "country": "US",
+  "currency": "USD",
+  "exchange": "NASDAQ",
+  "finnhubIndustry": "Technology",
+  "ipo": "1986-03-13",
+  "logo": "",
+  "marketCapitalization": 2900000.0,
+  "name": "Microsoft Corp",
+  "phone": "",
+  "shareOutstanding": 7430.0,
+  "ticker": "MSFT",
+  "weburl": "https://www.microsoft.com/"
+}

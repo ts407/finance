@@ -1,0 +1,14 @@
+{
+  "country": "US",
+  "currency": "USD",
+  "exchange": "NASDAQ",
+  "finnhubIndustry": "Technology",
+  "ipo": "1980-12-12",
+  "logo": "",
+  "marketCapitalization": 3200000.0,
+  "name": "Apple Inc",
+  "phone": "",
+  "shareOutstanding": 15400.0,
+  "ticker": "AAPL",
+  "weburl": "https://www.apple.com/"
+}

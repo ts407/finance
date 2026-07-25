@@ -7,6 +7,8 @@ const state = {
 
 const els = {
   asOf: document.getElementById("as-of"),
+  market: document.getElementById("market"),
+  social: document.getElementById("social"),
   filter: document.getElementById("filter"),
   sort: document.getElementById("sort"),
   preset: document.getElementById("preset"),
@@ -54,6 +56,9 @@ function queryParams() {
     as_of: els.asOf.value || todayISO(),
     sort: els.sort.value,
     preset: els.preset.value,
+    market: els.market.value,
+    social: els.social.value,
+    history_days: "14",
   });
   if (els.filter.value.trim()) params.set("q", els.filter.value.trim());
   if (els.sector.value) params.set("sector", els.sector.value);
@@ -89,10 +94,12 @@ async function loadSnapshot() {
     populateSectors();
     renderTables();
     const n = state.data.standings.length;
+    const m = state.data.meta || {};
+    const mode = `${m.market_mode || els.market.value} / ${m.social_mode || els.social.value}`;
     setStatus(
       n === 0
         ? "No rows match this preset / filter."
-        : `${n} names · preset ${els.preset.value}`,
+        : `${n} names · ${mode} · preset ${els.preset.value}`,
       n === 0 ? "empty" : "",
     );
   } catch (err) {
@@ -110,7 +117,8 @@ function renderMeta() {
   els.metaN.textContent = String(m.n_names);
   els.metaPlaceholder.textContent = m.placeholder ? "placeholder" : "frozen";
   els.footMethod.textContent = `${m.score_kind} · ${m.methodology_version}`;
-  els.footPosture.textContent = `${m.market_provider} · ${m.social_provider} · live social later`;
+  els.footPosture.textContent =
+    `${m.market_mode || m.market_provider} · ${m.social_mode || m.social_provider}`;
 }
 
 function populateSectors() {
@@ -235,7 +243,8 @@ function openDrawer(ticker) {
   els.drawerNote.innerHTML =
     "Composite Standing averages sector-relative V/Q/M. "
     + "Attention Tilt uses tanh + shrinkage around neutral 50 and cannot dominate the base. "
-    + "<strong>Fixture social · live later.</strong> Not investment advice.";
+    + `<strong>${m.market_mode || "market"} · ${m.social_mode || "social"}</strong>. `
+    + "Not investment advice.";
 
   els.drawer.classList.add("open");
   els.drawer.setAttribute("aria-hidden", "false");
@@ -271,10 +280,12 @@ function exportCsv() {
 }
 
 function bind() {
-  els.asOf.value = "2026-07-22";
+  els.asOf.value = todayISO();
   els.reload.addEventListener("click", () => loadSnapshot());
   els.exportCsv.addEventListener("click", exportCsv);
   els.asOf.addEventListener("change", () => loadSnapshot());
+  els.market.addEventListener("change", () => loadSnapshot());
+  els.social.addEventListener("change", () => loadSnapshot());
   els.sort.addEventListener("change", () => loadSnapshot());
   els.preset.addEventListener("change", () => loadSnapshot());
   els.sector.addEventListener("change", () => loadSnapshot());

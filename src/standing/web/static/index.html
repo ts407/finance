@@ -36,6 +36,25 @@
 
   <section class="controls" aria-label="Filters">
     <label class="field">
+      <span>Market</span>
+      <select id="market">
+        <option value="stooq" selected>Stooq OHLCV (live)</option>
+        <option value="fixture">Fixture</option>
+        <option value="finnhub">Finnhub (+ key)</option>
+        <option value="live">Live auto</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Attention</span>
+      <select id="social">
+        <option value="wikipedia" selected>Wikipedia (live)</option>
+        <option value="open">Wiki + Bluesky</option>
+        <option value="bluesky">Bluesky</option>
+        <option value="fixture">Fixture</option>
+        <option value="all">All</option>
+      </select>
+    </label>
+    <label class="field">
       <span>As of</span>
       <input type="date" id="as-of" />
     </label>
@@ -154,7 +173,7 @@
 
   <footer class="foot">
     <span id="foot-method">methodology —</span>
-    <span id="foot-posture">fixture market · fixture social · live social later</span>
+    <span id="foot-posture">stooq market · wikipedia attention</span>
     <a href="/methodology">Read methodology</a>
   </footer>
 

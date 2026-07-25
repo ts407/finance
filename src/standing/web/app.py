@@ -15,7 +15,12 @@ from pydantic import BaseModel
 
 from standing.config import load_scoring_config
 from standing.pipeline.snapshot import StandingSnapshot, run_snapshot
-from standing.providers import SOCIAL_MODES, build_market_provider, build_social_provider
+from standing.providers import (
+    MARKET_MODES,
+    SOCIAL_MODES,
+    build_market_provider,
+    build_social_provider,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -60,6 +65,8 @@ class StandingMeta(BaseModel):
     sector_counts: dict[str, int]
     market_provider: str
     social_provider: str
+    market_mode: str | None = None
+    social_mode: str | None = None
 
 
 class StandingRow(BaseModel):
@@ -119,13 +126,15 @@ def _parse_as_of(value: str | None) -> date:
         raise HTTPException(status_code=400, detail="as_of must be YYYY-MM-DD") from exc
 
 
-@lru_cache(maxsize=32)
-def _cached_snapshot(as_of_iso: str, history_days: int, social_mode: str) -> dict[str, Any]:
+@lru_cache(maxsize=64)
+def _cached_snapshot(
+    as_of_iso: str, history_days: int, social_mode: str, market_mode: str
+) -> dict[str, Any]:
     as_of = date.fromisoformat(as_of_iso)
     cfg = load_scoring_config()
     snap = run_snapshot(
         as_of=as_of,
-        market=build_market_provider(),
+        market=build_market_provider(market_mode),
         social=build_social_provider(social_mode, history_days=history_days),
         cfg=cfg,
     )
@@ -133,8 +142,25 @@ def _cached_snapshot(as_of_iso: str, history_days: int, social_mode: str) -> dic
 
 
 def _default_social_mode() -> str:
-    mode = os.environ.get("STANDING_SOCIAL", "fixture").strip().lower()
-    return mode if mode in SOCIAL_MODES else "fixture"
+    mode = os.environ.get("STANDING_SOCIAL", "wikipedia").strip().lower()
+    return mode if mode in SOCIAL_MODES else "wikipedia"
+
+
+def _default_market_mode() -> str:
+    mode = os.environ.get("STANDING_MARKET", "stooq").strip().lower()
+    return mode if mode in MARKET_MODES else "stooq"
+
+
+def _resolve_mode(value: str | None, allowed: tuple[str, ...], default: str) -> str:
+    if value is None or value == "":
+        return default
+    key = value.strip().lower()
+    if key not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown mode {value!r}; expected one of {list(allowed)}",
+        )
+    return key
 
 
 def _serialize(snap: StandingSnapshot) -> dict[str, Any]:
@@ -248,8 +274,9 @@ def _methodology_payload() -> dict[str, Any]:
             "attention_confirmed",
         ],
         "source_posture": (
-            "fixture market · social selectable via STANDING_SOCIAL="
-            f"{'/'.join(SOCIAL_MODES)} (default fixture; open = wikipedia+bluesky)"
+            "Desk defaults: market=stooq (real OHLCV overlay) · social=wikipedia. "
+            f"Modes market={list(MARKET_MODES)} social={list(SOCIAL_MODES)}. "
+            "Set FINNHUB_API_KEY for live fundamentals."
         ),
     }
 
@@ -281,6 +308,8 @@ def create_app() -> FastAPI:
     def snapshot(
         as_of: str | None = Query(default=None, description="YYYY-MM-DD"),
         history_days: int = Query(default=14, ge=7, le=60),
+        social: str | None = Query(default=None, description="fixture|wikipedia|bluesky|open|all"),
+        market: str | None = Query(default=None, description="fixture|stooq|finnhub|live"),
         sort: Literal["final", "heat", "value", "quality", "momentum"] = Query(default="final"),
         preset: PresetName = Query(default="balanced"),
         sector: str | None = Query(default=None, description="Exact GICS-11 sector"),
@@ -288,7 +317,20 @@ def create_app() -> FastAPI:
         limit: int | None = Query(default=None, ge=1, le=500),
     ) -> dict[str, Any]:
         day = _parse_as_of(as_of)
-        payload = _cached_snapshot(day.isoformat(), history_days, _default_social_mode())
+        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
+        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
+        try:
+            payload = _cached_snapshot(day.isoformat(), history_days, social_mode, market_mode)
+        except Exception as exc:  # surface provider errors cleanly
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        payload = {
+            **payload,
+            "meta": {
+                **payload["meta"],
+                "social_mode": social_mode,
+                "market_mode": market_mode,
+            },
+        }
         standings, heat, _key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -305,6 +347,8 @@ def create_app() -> FastAPI:
     def snapshot_csv(
         as_of: str | None = Query(default=None),
         history_days: int = Query(default=14, ge=7, le=60),
+        social: str | None = Query(default=None),
+        market: str | None = Query(default=None),
         sort: Literal["final", "heat", "value", "quality", "momentum"] = Query(default="final"),
         preset: PresetName = Query(default="balanced"),
         sector: str | None = Query(default=None),
@@ -312,7 +356,9 @@ def create_app() -> FastAPI:
         limit: int | None = Query(default=None, ge=1, le=500),
     ) -> StreamingResponse:
         day = _parse_as_of(as_of)
-        payload = _cached_snapshot(day.isoformat(), history_days, _default_social_mode())
+        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
+        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
+        payload = _cached_snapshot(day.isoformat(), history_days, social_mode, market_mode)
         standings, _heat, _key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -341,16 +387,20 @@ def create_app() -> FastAPI:
         ticker: str,
         as_of: str | None = Query(default=None),
         history_days: int = Query(default=14, ge=7, le=60),
+        social: str | None = Query(default=None),
+        market: str | None = Query(default=None),
     ) -> dict[str, Any]:
         day = _parse_as_of(as_of)
-        payload = _cached_snapshot(day.isoformat(), history_days, _default_social_mode())
+        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
+        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
+        payload = _cached_snapshot(day.isoformat(), history_days, social_mode, market_mode)
         match = next(
             (r for r in payload["standings"] if str(r["ticker"]).upper() == ticker.upper()),
             None,
         )
         if match is None:
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not in universe")
-        return {"meta": payload["meta"], "row": match}
+        return {"meta": {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode}, "row": match}
 
     @app.get("/")
     def index() -> FileResponse:

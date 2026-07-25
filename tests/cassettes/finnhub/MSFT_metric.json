@@ -1,0 +1,22 @@
+{
+  "metric": {
+    "10DayAverageTradingVolume": 22.5,
+    "13WeekPriceReturnDaily": 5.0,
+    "26WeekPriceReturnDaily": 10.0,
+    "3MonthAverageTradingVolume": 1400.0,
+    "52WeekHigh": 450.0,
+    "52WeekLow": 350.0,
+    "52WeekPriceReturnDaily": 18.0,
+    "5DayPriceReturnDaily": 0.8,
+    "currentEv/ebitdaAnnual": 24.0,
+    "marketCapitalization": 2900000.0,
+    "operatingMarginTTM": 42.0,
+    "pb": 12.5,
+    "peTTM": 35.0,
+    "revenueGrowthTTMYoy": 12.0,
+    "roeTTM": 38.0
+  },
+  "metricType": "all",
+  "series": {},
+  "symbol": "MSFT"
+}
