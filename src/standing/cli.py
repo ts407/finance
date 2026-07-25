@@ -8,11 +8,13 @@ from rich.console import Console
 from rich.table import Table
 
 from standing.config import load_scoring_config
+from standing.envfile import load_env
 from standing.pipeline.report import render_html_report
 from standing.pipeline.snapshot import persist_snapshot, run_snapshot
 from standing.providers import MARKET_MODES, SOCIAL_MODES, build_market_provider, build_social_provider
 
 console = Console()
+load_env()
 
 
 def _parse_date(value: str | None) -> date:

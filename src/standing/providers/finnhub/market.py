@@ -69,14 +69,17 @@ class FinnhubMarketProvider(MarketProvider, ProviderMeta):
                 stooq_dir = sibling if sibling.exists() else None
             ohlcv = StooqOHLCV(cassette_dir=stooq_dir, allow_network=net)
         seeds = listing_lookup()
+        # Desk default: compact fixture universe (seed lists are 100s of names — too slow for free tier)
+        from standing.providers.market_fixture import FIXTURE_TICKERS
+
+        desk_tickers = [t for t, _, _ in FIXTURE_TICKERS]
         return cls(
             client=client,
             ohlcv=ohlcv,
-            tickers=load_seed_tickers(),
+            tickers=desk_tickers,
             seed_listings=seeds,
-            # Cassettes and offline mode support arbitrary as_of; live Finnhub
-            # fundamentals are point-in-time "now" but Stooq can still slice history.
-            allow_historical_as_of=bool(cdir) or (not net),
+            # Fundamentals are "as of now"; OHLCV still respects as_of. Allow desk date picks.
+            allow_historical_as_of=True,
         )
 
     def name(self) -> str:

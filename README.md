@@ -27,11 +27,10 @@ pytest
 # Fixture (CI / offline)
 standing table --as-of 2026-07-22 --market fixture --social fixture
 
-# Live desk — SEC EDGAR fundamentals + Yahoo OHLCV + Wikipedia/Bluesky attention
+# Live desk — Finnhub fundamentals when FINNHUB_API_KEY is in `.env`, else SEC EDGAR
 standing table --as-of 2026-07-22 --market live --social open
 standing serve --host 127.0.0.1 --port 8000
-# UI defaults: Market=Live · Attention=Wiki+Bluesky
-# Optional: FINNHUB_API_KEY=... to prefer Finnhub fundamentals under market=live
+# cp .env.example .env  # set FINNHUB_API_KEY locally (gitignored)
 ```
 
 ## Web desk URL map

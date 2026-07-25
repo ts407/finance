@@ -10,3 +10,6 @@ build/
 *.egg-info/
 artifacts/
 .DS_Store
+.env
+.env.local
+*.pem

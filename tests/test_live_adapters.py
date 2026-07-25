@@ -116,7 +116,12 @@ def test_seed_universe_dedupe():
     assert len(tickers) >= 100
 
 
-def test_factory_defaults_to_fixture():
+def test_factory_defaults_to_fixture(monkeypatch):
+    monkeypatch.delenv("STANDING_MARKET", raising=False)
+    monkeypatch.delenv("STANDING_MARKET_PROVIDER", raising=False)
+    monkeypatch.delenv("STANDING_SOCIAL", raising=False)
+    monkeypatch.delenv("STANDING_SOCIAL_PROVIDER", raising=False)
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
     m = make_market_provider()
     s = make_social_provider()
     assert m.name() == "fixture-market"

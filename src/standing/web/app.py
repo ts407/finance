@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from standing.config import load_scoring_config
+from standing.envfile import load_env
 from standing.pipeline.snapshot import StandingSnapshot, run_snapshot
 from standing.providers import (
     MARKET_MODES,
@@ -21,6 +22,8 @@ from standing.providers import (
     build_market_provider,
     build_social_provider,
 )
+
+load_env()
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
