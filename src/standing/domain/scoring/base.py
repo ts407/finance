@@ -3,6 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from standing.domain.scoring.peer_buckets import attach_size_buckets, peer_group_key
+from standing.domain.scoring.value_metrics import EV_INAPPLICABLE_SECTORS, value_metric_frame
+
 GICS_11 = [
     "Communication Services",
     "Consumer Discretionary",
@@ -30,7 +33,6 @@ def _percentile_rank(s: pd.Series, higher_is_better: bool = True) -> pd.Series:
     valid = s.dropna()
     if valid.empty:
         return pd.Series(np.nan, index=s.index)
-    # average rank → percentile in [0, 100]
     ranks = valid.rank(method="average", ascending=higher_is_better)
     pct = (ranks - 1) / max(len(valid) - 1, 1) * 100.0
     out = pd.Series(np.nan, index=s.index, dtype=float)
@@ -38,15 +40,15 @@ def _percentile_rank(s: pd.Series, higher_is_better: bool = True) -> pd.Series:
     return out
 
 
-def _sector_relative_percentile(
+def _peer_relative_percentile(
     df: pd.DataFrame,
     value_col: str,
-    sector_col: str = "sector",
+    peer_col: str = "_peer",
     higher_is_better: bool = True,
     winsorize: tuple[float, float] | None = (0.01, 0.99),
 ) -> pd.Series:
     parts: list[pd.Series] = []
-    for _, group in df.groupby(sector_col, sort=False):
+    for _, group in df.groupby(peer_col, sort=False):
         vals = group[value_col]
         if winsorize is not None:
             vals = winsorize_series(vals, winsorize[0], winsorize[1])
@@ -54,59 +56,110 @@ def _sector_relative_percentile(
     return pd.concat(parts).reindex(df.index)
 
 
+def _multiple_to_value_percentile(
+    df: pd.DataFrame,
+    col: str,
+    *,
+    peer_col: str,
+    winsorize: tuple[float, float],
+) -> pd.Series:
+    """
+    Invert positive multiples (cheaper = higher). Non-positive but present values
+    map to the worst score (0) — not NaN (which would silently drop / inflate peers).
+    """
+    raw = pd.to_numeric(df[col], errors="coerce")
+    positive = raw.where(raw > 0)
+    inv = 1.0 / positive
+    tmp = df[[peer_col]].copy()
+    tmp["_v"] = inv
+    pct = _peer_relative_percentile(tmp, "_v", peer_col=peer_col, higher_is_better=True, winsorize=winsorize)
+    bad = raw.notna() & (raw <= 0)
+    pct = pct.copy()
+    pct.loc[bad] = 0.0
+    return pct
+
+
+def _signed_quality_percentile(
+    df: pd.DataFrame,
+    col: str,
+    *,
+    peer_col: str,
+    winsorize: tuple[float, float],
+) -> pd.Series:
+    """
+    Higher is better. Missing stays NaN. Present values (including negative) are ranked
+    after winsorizing — negatives land in the worst decile naturally, not as 'missing'.
+    """
+    tmp = df[[peer_col]].copy()
+    tmp["_q"] = pd.to_numeric(df[col], errors="coerce")
+    return _peer_relative_percentile(tmp, "_q", peer_col=peer_col, higher_is_better=True, winsorize=winsorize)
+
+
 def pillar_percentiles(
     df: pd.DataFrame,
     *,
     winsorize: tuple[float, float] = (0.01, 0.99),
+    peer_frame: str = "sector",
 ) -> pd.DataFrame:
     """
-    Compute sector-relative V / Q / M percentiles.
+    Compute peer-relative V / Q / M percentiles with value coverage metadata.
 
-    Value inputs (cheaper = higher): pe_ttm, pb, ev_ebitda
-    Quality inputs: roe, operating_margin, revenue_growth_yoy
-    Momentum inputs: ret_1m, ret_3m, ret_6m, relative_volume
+    Value: pe_ttm, pb, and EV-ladder (or sector-specific skip for Financials/REITs).
+    Within-pillar: mean of available metric percentiles (renormalize), not NaN pillar.
     """
-    out = df[["ticker", "sector"]].copy()
+    work = attach_size_buckets(value_metric_frame(df))
+    work["_peer"] = peer_group_key(work, peer_frame=peer_frame)
+    out = work[["ticker", "sector", "size_bucket"]].copy()
+    out["peer_group"] = work["_peer"]
 
-    # Value — invert multiples (lower multiple → higher standing)
-    value_parts = []
-    for col in ("pe_ttm", "pb", "ev_ebitda"):
-        # Exclude non-positive for P/E-like fields
-        series = df[col].where(df[col] > 0)
-        inv = 1.0 / series
-        tmp = df[["sector"]].copy()
-        tmp["_v"] = inv
-        value_parts.append(
-            _sector_relative_percentile(tmp, "_v", higher_is_better=True, winsorize=winsorize)
-        )
-    out["value"] = pd.concat(value_parts, axis=1).median(axis=1, skipna=True)
+    pe_pct = _multiple_to_value_percentile(work, "pe_ttm", peer_col="_peer", winsorize=winsorize)
+    pb_pct = _multiple_to_value_percentile(work, "pb", peer_col="_peer", winsorize=winsorize)
+    ev_pct = _multiple_to_value_percentile(work, "_ev_for_value", peer_col="_peer", winsorize=winsorize)
 
-    # Quality
+    value_stack = pd.concat([pe_pct, pb_pct, ev_pct], axis=1)
+    # For EV-inapplicable sectors, ignore EV column entirely in the mean
+    inapplicable = work["sector"].isin(EV_INAPPLICABLE_SECTORS)
+    value_stack.loc[inapplicable, value_stack.columns[2]] = np.nan
+
+    out["value"] = value_stack.mean(axis=1, skipna=True)
+    out["value_n_metrics"] = value_stack.notna().sum(axis=1).astype(int)
+    # Expected metrics: 2 for financials/REITs, 3 otherwise
+    expected = np.where(inapplicable, 2, 3)
+    out["value_coverage"] = (out["value_n_metrics"] / expected).clip(0, 1)
+    out["value_ev_rung"] = work["value_ev_rung"]
+    out["value_metric_set"] = work["value_metric_set"]
+    # Confidence haircut: full coverage → 1.0; each missing metric reduces
+    out["value_confidence"] = out["value_coverage"]
+
+    # Quality — signed ranking (negatives are worst, not missing)
     quality_parts = []
     for col in ("roe", "operating_margin", "revenue_growth_yoy"):
-        tmp = df[["sector"]].copy()
-        tmp["_q"] = df[col]
         quality_parts.append(
-            _sector_relative_percentile(tmp, "_q", higher_is_better=True, winsorize=winsorize)
+            _signed_quality_percentile(work, col, peer_col="_peer", winsorize=winsorize)
         )
-    out["quality"] = pd.concat(quality_parts, axis=1).median(axis=1, skipna=True)
+    q_stack = pd.concat(quality_parts, axis=1)
+    out["quality"] = q_stack.mean(axis=1, skipna=True)
+    out["quality_n_metrics"] = q_stack.notna().sum(axis=1).astype(int)
+    out["quality_coverage"] = (out["quality_n_metrics"] / 3.0).clip(0, 1)
 
-    # Momentum (sector-relative primary)
+    # Momentum
     mom_parts = []
     for col in ("ret_1m", "ret_3m", "ret_6m", "relative_volume"):
-        tmp = df[["sector"]].copy()
-        tmp["_m"] = df[col]
+        tmp = work[["_peer"]].copy()
+        tmp["_m"] = pd.to_numeric(work[col], errors="coerce")
         mom_parts.append(
-            _sector_relative_percentile(tmp, "_m", higher_is_better=True, winsorize=winsorize)
+            _peer_relative_percentile(tmp, "_m", peer_col="_peer", higher_is_better=True, winsorize=winsorize)
         )
-    out["momentum"] = pd.concat(mom_parts, axis=1).median(axis=1, skipna=True)
+    m_stack = pd.concat(mom_parts, axis=1)
+    out["momentum"] = m_stack.mean(axis=1, skipna=True)
+    out["momentum_n_metrics"] = m_stack.notna().sum(axis=1).astype(int)
+    out["momentum_coverage"] = (out["momentum_n_metrics"] / 4.0).clip(0, 1)
 
-    # Secondary global momentum display field (not in composite)
     global_parts = []
     for col in ("ret_1m", "ret_3m", "ret_6m", "relative_volume"):
-        vals = winsorize_series(df[col], winsorize[0], winsorize[1])
+        vals = winsorize_series(pd.to_numeric(work[col], errors="coerce"), winsorize[0], winsorize[1])
         global_parts.append(_percentile_rank(vals, higher_is_better=True))
-    out["momentum_global"] = pd.concat(global_parts, axis=1).median(axis=1, skipna=True)
+    out["momentum_global"] = pd.concat(global_parts, axis=1).mean(axis=1, skipna=True)
 
     return out
 
@@ -121,7 +174,7 @@ def compute_base_standing(
     weight_vec = np.array([w[c] for c in cols], dtype=float)
     weight_vec = weight_vec / weight_vec.sum()
     mat = pillars[cols].to_numpy(dtype=float)
-    # Do not silently renorm missing pillars — require all three for a base score
+    # Cross-pillar: still require all three pillars present
     complete = ~np.isnan(mat).any(axis=1)
     base = np.full(len(pillars), np.nan)
     base[complete] = mat[complete] @ weight_vec

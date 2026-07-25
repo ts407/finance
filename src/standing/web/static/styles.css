@@ -432,6 +432,18 @@ tbody tr:nth-child(odd):hover { background: rgba(31, 111, 91, 0.08); }
 .status-line.error { color: #9b2c2c; }
 .status-line.empty { color: var(--warn); }
 
+.fixture-banner {
+  margin: 0 clamp(1.25rem, 4vw, 3rem) 0.75rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid rgba(154, 107, 18, 0.35);
+  background: rgba(154, 107, 18, 0.12);
+  color: #6b4a0a;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.fixture-banner.hidden { display: none; }
+.fixture-banner strong { font-weight: 700; }
+
 .state-row td {
   text-align: center;
   color: var(--muted);

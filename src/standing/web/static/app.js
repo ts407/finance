@@ -36,6 +36,9 @@ const els = {
   metaPlaceholder: document.getElementById("meta-placeholder"),
   footMethod: document.getElementById("foot-method"),
   footPosture: document.getElementById("foot-posture"),
+  footServe: document.getElementById("foot-serve"),
+  footStaleness: document.getElementById("foot-staleness"),
+  fixtureBanner: document.getElementById("fixture-banner"),
 };
 
 function todayISO() {
@@ -96,10 +99,11 @@ async function loadSnapshot() {
     const n = state.data.standings.length;
     const m = state.data.meta || {};
     const mode = `${m.market_mode || els.market.value} / ${m.social_mode || els.social.value}`;
+    const serve = m.served_from ? ` · served ${m.served_from}` : "";
     setStatus(
       n === 0
         ? "No rows match this preset / filter."
-        : `${n} names · ${mode} · preset ${els.preset.value}`,
+        : `${n} names · ${mode}${serve} · preset ${els.preset.value}`,
       n === 0 ? "empty" : "",
     );
   } catch (err) {
@@ -113,12 +117,28 @@ async function loadSnapshot() {
 function renderMeta() {
   const m = state.data.meta;
   els.metaAsof.textContent = m.as_of;
-  els.metaUniverse.textContent = m.universe_id;
+  els.metaUniverse.textContent = m.universe_as_of
+    ? `${m.universe_id} @ ${m.universe_as_of}`
+    : m.universe_id;
   els.metaN.textContent = String(m.n_names);
   els.metaPlaceholder.textContent = m.placeholder ? "placeholder" : "frozen";
   els.footMethod.textContent = `${m.score_kind} · ${m.methodology_version}`;
+  const tiltNote = m.tilt_max != null ? ` · tilt≤${m.tilt_max}` : "";
+  const attn = m.attention_mode ? ` · ${m.attention_mode}` : "";
   els.footPosture.textContent =
-    `${m.market_mode || m.market_provider} · ${m.social_mode || m.social_provider}`;
+    `${m.market_mode || m.market_provider} · ${m.social_mode || m.social_provider}${tiltNote}${attn}`;
+  els.footServe.textContent = m.served_from
+    ? `served ${m.served_from}${m.created_at_utc ? ` · ingested ${m.created_at_utc}` : ""}`
+    : "served —";
+  const stale = m.provider_staleness_utc || {};
+  const parts = [];
+  if (stale.market) parts.push(`market ${stale.market}`);
+  if (stale.social) parts.push(`attention ${stale.social}`);
+  if (stale.scored) parts.push(`scored ${stale.scored}`);
+  els.footStaleness.textContent = parts.length ? parts.join(" · ") : "staleness —";
+
+  const socialFixture = m.social_is_fixture === true || (m.social_mode || els.social.value) === "fixture";
+  els.fixtureBanner.classList.toggle("hidden", !socialFixture);
 }
 
 function populateSectors() {
@@ -216,6 +236,15 @@ function openDrawer(ticker) {
   }
   flags.push(`<span class="flag">${row.social_badge} social</span>`);
   flags.push(`<span class="flag">c=${fmt(row.confidence_c, 2)} · n=${fmt(row.n, 0)}</span>`);
+  if (row.value_coverage != null) {
+    flags.push(`<span class="flag">value coverage ${fmt(row.value_coverage, 2)}</span>`);
+  }
+  if (row.value_ev_rung) {
+    flags.push(`<span class="flag">EV ${row.value_ev_rung}</span>`);
+  }
+  if (m.social_is_fixture || m.social_mode === "fixture") {
+    flags.push(`<span class="flag warn">fixture attention</span>`);
+  }
   els.drawerFlags.innerHTML = flags.join(" ");
 
   els.drawerBars.innerHTML = [

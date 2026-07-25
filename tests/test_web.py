@@ -22,8 +22,11 @@ def test_web_health_and_snapshot():
     assert payload["meta"]["universe_id"]
     assert payload["meta"]["social_mode"] == "fixture"
     assert payload["meta"]["market_mode"] == "fixture"
+    assert payload["meta"]["social_is_fixture"] is True
+    assert payload["meta"]["served_from"] in ("live", "store")
     assert len(payload["standings"]) > 0
     assert "final_standing" in payload["standings"][0]
+    assert "value_coverage" in payload["standings"][0]
     assert len(payload["heat"]) > 0
 
     ticker = payload["standings"][0]["ticker"]
@@ -41,6 +44,8 @@ def test_web_health_and_snapshot():
     assert b'id="preset"' in index.content
     assert b'id="market"' in index.content
     assert b'id="social"' in index.content
+    assert b'id="fixture-banner"' in index.content
+    assert b'id="foot-staleness"' in index.content
 
 
 FIXTURE_PARAMS = {"as_of": "2026-07-22", "social": "fixture", "market": "fixture"}
@@ -50,7 +55,7 @@ def test_web_filter_and_sort():
     client = TestClient(create_app())
     snap = client.get(
         "/api/snapshot",
-        params={**FIXTURE_PARAMS, "q": "tech", "sort": "value", "limit": 5},
+        params={**FIXTURE_PARAMS, "q": "tech", "preset": "value_led", "limit": 5},
     )
     assert snap.status_code == 200
     rows = snap.json()["standings"]
@@ -97,7 +102,9 @@ def test_web_snapshot_csv():
     assert res.status_code == 200
     assert "text/csv" in res.headers["content-type"]
     text = res.text
-    assert "ticker,sector,value" in text.splitlines()[0]
+    header = text.splitlines()[0]
+    assert "ticker" in header and "sector" in header and "value" in header
+    assert "size_bucket" in header
     assert len(text.strip().splitlines()) == 4  # header + 3 rows
 
 
@@ -109,7 +116,7 @@ def test_web_methodology():
     assert body["score_kind"] == "editorial_descriptive"
     assert body["placeholder"] is True
     assert "tilt" in body["formulas"]
-    assert body["social_tilt"]["tilt_max"] == 10
+    assert body["social_tilt"]["tilt_max"] == 5
     assert "balanced" in body["presets"]
 
     page = client.get("/methodology")

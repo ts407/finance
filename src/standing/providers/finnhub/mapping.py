@@ -21,6 +21,9 @@ MARKET_COLUMNS = [
     "pe_ttm",
     "pb",
     "ev_ebitda",
+    "ev_ebit",
+    "ev_sales",
+    "ptbv",
     "roe",
     "operating_margin",
     "revenue_growth_yoy",
@@ -135,6 +138,9 @@ def map_finnhub_row(
         "pe_ttm": _pick_metric(metric, "peTTM"),
         "pb": _pick_metric(metric, "pb"),
         "ev_ebitda": _pick_metric(metric, "currentEv/ebitdaAnnual", "enterpriseValueMultipleTTM"),
+        "ev_ebit": _pick_metric(metric, "currentEv/ebitAnnual", "evEbitTTM"),
+        "ev_sales": _pick_metric(metric, "currentEv/salesAnnual", "evSalesTTM"),
+        "ptbv": _pick_metric(metric, "ptbv", "pbAnnual"),  # tangible book when present
         "roe": normalize_ratio_or_percent(
             _pick_metric(metric, "roeTTM"), threshold=PERCENT_FIELDS["roe"]
         ),

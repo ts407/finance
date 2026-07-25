@@ -68,6 +68,8 @@ def test_fixture_snapshot_runs():
         market=FixtureMarketProvider(),
         social=FixtureSocialProvider(history_days=14),
         cfg=cfg,
+        market_mode="fixture",
+        social_mode="fixture",
     )
     assert snap.score_kind == "editorial_descriptive"
     assert snap.placeholder is True
@@ -75,6 +77,10 @@ def test_fixture_snapshot_runs():
     assert set(["composite_standing", "attention_tilt", "final_standing"]).issubset(
         snap.standings.columns
     )
+    assert "value_coverage" in snap.standings.columns
+    assert "size_bucket" in snap.standings.columns
+    assert snap.meta["social_is_fixture"] is True
+    assert snap.meta["universe_as_of"]
     # Final equals clip(base+tilt)
     recomputed = np.clip(
         snap.standings["composite_standing"] + snap.standings["attention_tilt"], 0, 100

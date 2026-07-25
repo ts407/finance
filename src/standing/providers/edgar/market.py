@@ -89,6 +89,8 @@ class EdgarMarketProvider(MarketProvider, ProviderMeta):
                     "pe_ttm",
                     "pb",
                     "ev_ebitda",
+                    "ev_ebit",
+                    "ev_sales",
                     "roe",
                     "operating_margin",
                     "revenue_growth_yoy",

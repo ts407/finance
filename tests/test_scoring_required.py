@@ -61,12 +61,13 @@ def test_placeholder_true_on_fixture_config():
     cfg = load_scoring_config()
     assert cfg.placeholder is True
     assert cfg.score_kind == "editorial_descriptive"
-    assert cfg.methodology_version == "2.0.0"
+    assert cfg.methodology_version == "2.1.0"
     # Fixture-bound social/market posture
     assert cfg.social_pipeline["reddit_comments"] is False
     assert cfg.social_tilt["shape"] == "tanh"
     assert cfg.social_tilt["symmetric"] is True
-    assert math.isclose(cfg.social_tilt["tilt_max"], 10)
+    assert math.isclose(cfg.social_tilt["tilt_max"], 5)
+    assert cfg.social_tilt.get("attention_mode") == "volume_only"
 
 
 def test_tilt_tanh_saturates():

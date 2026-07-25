@@ -84,6 +84,8 @@ def _synth_market(as_of: date, seed: int = 42) -> pd.DataFrame:
                 "pe_ttm": float(np.clip(rng.lognormal(3.0 + 0.15 * g, 0.45), 3, 120)),
                 "pb": float(np.clip(rng.lognormal(1.0 + 0.1 * g, 0.4), 0.3, 40)),
                 "ev_ebitda": float(np.clip(rng.lognormal(2.5 + 0.12 * g, 0.4), 2, 80)),
+                "ev_ebit": float(np.clip(rng.lognormal(2.7 + 0.12 * g, 0.4), 3, 100)),
+                "ev_sales": float(np.clip(rng.lognormal(1.5 + 0.12 * g, 0.45), 0.4, 30)),
                 "roe": float(np.clip(0.08 + 0.12 * g + rng.normal(0, 0.05), -0.2, 0.6)),
                 "operating_margin": float(
                     np.clip(0.12 + 0.08 * g + rng.normal(0, 0.04), -0.1, 0.5)

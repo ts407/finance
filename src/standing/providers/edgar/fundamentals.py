@@ -138,6 +138,8 @@ def extract_fundamentals(
         "pe_ttm": pe_ttm,
         "pb": pb,
         "ev_ebitda": None,
+        "ev_ebit": None,
+        "ev_sales": None,
         "roe": roe,
         "operating_margin": operating_margin,
         "revenue_growth_yoy": revenue_growth_yoy,

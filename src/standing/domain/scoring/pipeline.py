@@ -61,9 +61,11 @@ def score_cross_section(inputs: ScoreInputs, cfg: ScoringConfig) -> pd.DataFrame
     """
     market = inputs.market.copy()
     wins = cfg.base["winsorize"]
+    peer_frame = str(cfg.base.get("peer_frame", "sector"))
     pillars = pillar_percentiles(
         market,
         winsorize=(float(wins["lower"]), float(wins["upper"])),
+        peer_frame=peer_frame,
     )
     weights = {k: float(v) for k, v in cfg.base["pillar_weights"].items()}
     base = compute_base_standing(pillars, weights=weights)
@@ -116,6 +118,17 @@ def score_cross_section(inputs: ScoreInputs, cfg: ScoringConfig) -> pd.DataFrame
                 "momentum": float(pillars.iloc[i]["momentum"]),
                 "momentum_global": float(pillars.iloc[i]["momentum_global"]),
                 "composite_standing": float(base.iloc[i]),
+                "size_bucket": str(pillars.iloc[i].get("size_bucket", "")),
+                "peer_group": str(pillars.iloc[i].get("peer_group", "")),
+                "value_n_metrics": int(pillars.iloc[i].get("value_n_metrics", 0)),
+                "value_coverage": float(pillars.iloc[i].get("value_coverage", np.nan)),
+                "value_confidence": float(pillars.iloc[i].get("value_confidence", np.nan)),
+                "value_ev_rung": str(pillars.iloc[i].get("value_ev_rung", "")),
+                "value_metric_set": str(pillars.iloc[i].get("value_metric_set", "")),
+                "quality_n_metrics": int(pillars.iloc[i].get("quality_n_metrics", 0)),
+                "quality_coverage": float(pillars.iloc[i].get("quality_coverage", np.nan)),
+                "momentum_n_metrics": int(pillars.iloc[i].get("momentum_n_metrics", 0)),
+                "momentum_coverage": float(pillars.iloc[i].get("momentum_coverage", np.nan)),
                 "s_obs": float(s_obs[i]),
                 "s_used": float(s_used[i]),
                 "n": float(n[i]),

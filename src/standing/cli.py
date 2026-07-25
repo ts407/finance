@@ -41,6 +41,8 @@ def cmd_score(args: argparse.Namespace) -> int:
         market=market,
         social=social,
         cfg=cfg,
+        market_mode=getattr(args, "market", None),
+        social_mode=getattr(args, "social", None),
     )
     out = Path(args.out)
     path = persist_snapshot(snap, out)
@@ -57,6 +59,83 @@ def cmd_score(args: argparse.Namespace) -> int:
             f"(<{cfg.universe['min_names_per_sector']} names): "
             + ", ".join(snap.meta["low_confidence_sectors"])
         )
+    return 0
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    """Compute and write the immutable daily snapshot (forward-eval log)."""
+    from standing.pipeline.store import SnapshotExistsError, persist_immutable
+
+    cfg = load_scoring_config(Path(args.config) if args.config else None)
+    as_of = _parse_date(args.as_of)
+    market, social = _providers(args)
+    snap = run_snapshot(
+        as_of=as_of,
+        market=market,
+        social=social,
+        cfg=cfg,
+        market_mode=args.market,
+        social_mode=args.social,
+    )
+    root = Path(args.out)
+    try:
+        path = persist_immutable(snap, root=root, force=bool(args.force))
+    except SnapshotExistsError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 2
+    console.print(
+        f"[bold]Immutable day log[/bold]  as_of={snap.as_of}  "
+        f"universe={snap.universe_id}  n={len(snap.standings)}  "
+        f"market={snap.meta.get('market_provider')}  social={snap.meta.get('social_provider')}"
+    )
+    console.print(f"Wrote {path}")
+    return 0
+
+
+def cmd_metrics_report(args: argparse.Namespace) -> int:
+    """Universe consistency check: missing / non-positive share per metric."""
+    cfg = load_scoring_config(Path(args.config) if args.config else None)
+    as_of = _parse_date(args.as_of)
+    market, _social = _providers(args)
+    frame = market.fetch(as_of)
+    cols = [
+        "pe_ttm",
+        "pb",
+        "ev_ebitda",
+        "ev_ebit",
+        "ev_sales",
+        "roe",
+        "operating_margin",
+        "revenue_growth_yoy",
+        "ret_1m",
+        "ret_3m",
+        "ret_6m",
+        "relative_volume",
+    ]
+    table = Table(title=f"Metric consistency — {as_of}  n={len(frame)}")
+    table.add_column("metric")
+    table.add_column("missing %", justify="right")
+    table.add_column("nonpos %", justify="right")
+    table.add_column("p50", justify="right")
+    for col in cols:
+        if col not in frame.columns:
+            table.add_row(col, "—", "—", "—")
+            continue
+        s = frame[col]
+        miss = float(s.isna().mean() * 100)
+        nonpos = float(((s.notna()) & (s <= 0)).mean() * 100)
+        p50 = s.median(skipna=True)
+        table.add_row(
+            col,
+            f"{miss:.1f}",
+            f"{nonpos:.1f}",
+            "—" if p50 != p50 else f"{p50:.3g}",  # noqa: PLR0124 — NaN check
+        )
+    console.print(table)
+    console.print(
+        f"[dim]methodology={cfg.methodology_version}  "
+        "nonpos = present but ≤0 (should rank worst, not 'missing')[/dim]"
+    )
     return 0
 
 
@@ -218,6 +297,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(s)
     s.add_argument("--out", default="artifacts/snapshots")
     s.set_defaults(func=cmd_score)
+
+    ing = sub.add_parser(
+        "ingest",
+        help="Write immutable daily snapshot for forward-eval (first write wins)",
+    )
+    add_common(ing)
+    ing.add_argument("--out", default="artifacts/snapshots")
+    ing.add_argument("--force", action="store_true", help="Archive prior day file then overwrite")
+    ing.set_defaults(func=cmd_ingest)
+
+    mr = sub.add_parser("metrics-report", help="Missing/non-positive metric consistency over universe")
+    add_common(mr)
+    mr.set_defaults(func=cmd_metrics_report)
 
     t = sub.add_parser("table", help="Print top Final Standing rows")
     add_common(t)

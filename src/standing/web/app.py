@@ -40,6 +40,7 @@ ATTENTION_TILT_FLOOR = 1.0
 CSV_COLUMNS = [
     "ticker",
     "sector",
+    "size_bucket",
     "value",
     "quality",
     "momentum",
@@ -47,6 +48,9 @@ CSV_COLUMNS = [
     "composite_standing",
     "attention_tilt",
     "final_standing",
+    "value_coverage",
+    "value_ev_rung",
+    "value_metric_set",
     "s_obs",
     "s_used",
     "n",
@@ -70,6 +74,15 @@ class StandingMeta(BaseModel):
     social_provider: str
     market_mode: str | None = None
     social_mode: str | None = None
+    served_from: str | None = None
+    social_is_fixture: bool | None = None
+    market_is_fixture: bool | None = None
+    provider_staleness_utc: dict[str, str] | None = None
+    created_at_utc: str | None = None
+    universe_as_of: str | None = None
+    tilt_max: float | None = None
+    attention_mode: str | None = None
+    peer_frame: str | None = None
 
 
 class StandingRow(BaseModel):
@@ -89,6 +102,10 @@ class StandingRow(BaseModel):
     final_standing: float
     sector_low_confidence: bool
     social_badge: str
+    size_bucket: str | None = None
+    value_coverage: float | None = None
+    value_ev_rung: str | None = None
+    value_metric_set: str | None = None
 
 
 class SnapshotResponse(BaseModel):
@@ -129,19 +146,75 @@ def _parse_as_of(value: str | None) -> date:
         raise HTTPException(status_code=400, detail="as_of must be YYYY-MM-DD") from exc
 
 
+def _prefer_store_default() -> bool:
+    """Try immutable day log first (cold-start). Override with STANDING_PREFER_STORE=0."""
+    raw = os.environ.get("STANDING_PREFER_STORE", "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def _store_only() -> bool:
+    raw = os.environ.get("STANDING_SERVE_STORE_ONLY", "0").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 @lru_cache(maxsize=64)
 def _cached_snapshot(
-    as_of_iso: str, history_days: int, social_mode: str, market_mode: str
+    as_of_iso: str, history_days: int, social_mode: str, market_mode: str, prefer_store: bool
 ) -> dict[str, Any]:
     as_of = date.fromisoformat(as_of_iso)
+    # Prefer immutable day log when present (cold-start / serve-from-snapshot).
+    if prefer_store:
+        try:
+            from standing.pipeline.store import load_immutable
+
+            loaded = load_immutable(as_of)
+            snap = loaded.to_standing_snapshot()
+            inner = loaded.meta.get("meta") or {}
+            payload = _serialize(snap)
+            payload["meta"] = {
+                **payload["meta"],
+                "served_from": "store",
+                "created_at_utc": loaded.meta.get("created_at_utc"),
+                "market_mode": inner.get("market_mode") or market_mode,
+                "social_mode": inner.get("social_mode") or social_mode,
+                "social_is_fixture": inner.get("social_is_fixture"),
+                "market_is_fixture": inner.get("market_is_fixture"),
+                "provider_staleness_utc": inner.get("provider_staleness_utc"),
+                "universe_as_of": inner.get("universe_as_of"),
+                "tilt_max": inner.get("tilt_max"),
+                "attention_mode": inner.get("attention_mode"),
+                "peer_frame": inner.get("peer_frame"),
+            }
+            return payload
+        except Exception:
+            if _store_only():
+                raise RuntimeError(f"No immutable snapshot for {as_of_iso}; run standing ingest")
+            # Fall through to live compute.
+
     cfg = load_scoring_config()
     snap = run_snapshot(
         as_of=as_of,
         market=build_market_provider(market_mode),
         social=build_social_provider(social_mode, history_days=history_days),
         cfg=cfg,
+        market_mode=market_mode,
+        social_mode=social_mode,
     )
-    return _serialize(snap)
+    payload = _serialize(snap)
+    payload["meta"] = {
+        **payload["meta"],
+        "served_from": "live",
+        "market_mode": market_mode,
+        "social_mode": social_mode,
+        "social_is_fixture": snap.meta.get("social_is_fixture"),
+        "market_is_fixture": snap.meta.get("market_is_fixture"),
+        "provider_staleness_utc": snap.meta.get("provider_staleness_utc"),
+        "universe_as_of": snap.meta.get("universe_as_of"),
+        "tilt_max": snap.meta.get("tilt_max"),
+        "attention_mode": snap.meta.get("attention_mode"),
+        "peer_frame": snap.meta.get("peer_frame"),
+    }
+    return payload
 
 
 def _default_social_mode() -> str:
@@ -254,8 +327,10 @@ def _methodology_payload() -> dict[str, Any]:
             "No Buyworthiness / Buy-Rank on the product surface",
             "Composite Standing = equal-weight sector-relative V/Q/M",
             "Attention Tilt is bounded (tanh) and secondary to the base",
+            "Volume-only attention until sentiment is calibrated (tilt_max dampened)",
             "Loud attention ≠ good",
             "Single score process: Final = clip(Base + Tilt, 0, 100)",
+            "Serve prefers immutable day snapshots (standing ingest)",
         ],
         "formulas": {
             "base": "Base = (V + Q + M) / 3",
@@ -279,7 +354,8 @@ def _methodology_payload() -> dict[str, Any]:
         "source_posture": (
             "Desk defaults: market=live (EDGAR fundamentals + Yahoo OHLCV; Finnhub if key) · "
             "social=open (Wikipedia + Bluesky). "
-            f"Modes market={list(MARKET_MODES)} social={list(SOCIAL_MODES)}."
+            f"Modes market={list(MARKET_MODES)} social={list(SOCIAL_MODES)}. "
+            "Fixture social is labelled in the UI — do not treat as live signal."
         ),
     }
 
@@ -307,6 +383,28 @@ def create_app() -> FastAPI:
     def methodology() -> dict[str, Any]:
         return _methodology_payload()
 
+    def _load_payload(
+        *,
+        as_of: str | None,
+        history_days: int,
+        social: str | None,
+        market: str | None,
+        prefer_store: bool | None,
+    ) -> tuple[date, str, str, dict[str, Any]]:
+        day = _parse_as_of(as_of)
+        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
+        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
+        use_store = _prefer_store_default() if prefer_store is None else prefer_store
+        try:
+            payload = _cached_snapshot(
+                day.isoformat(), history_days, social_mode, market_mode, use_store
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return day, social_mode, market_mode, payload
+
     @app.get("/api/snapshot", response_model=SnapshotResponse)
     def snapshot(
         as_of: str | None = Query(default=None, description="YYYY-MM-DD"),
@@ -318,22 +416,29 @@ def create_app() -> FastAPI:
         sector: str | None = Query(default=None, description="Exact GICS-11 sector"),
         q: str | None = Query(default=None, description="Ticker or sector filter"),
         limit: int | None = Query(default=None, ge=1, le=500),
+        prefer_store: bool | None = Query(
+            default=None,
+            description="Prefer immutable day log (default from STANDING_PREFER_STORE)",
+        ),
     ) -> dict[str, Any]:
-        day = _parse_as_of(as_of)
-        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
-        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
-        try:
-            payload = _cached_snapshot(day.isoformat(), history_days, social_mode, market_mode)
-        except Exception as exc:  # surface provider errors cleanly
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        _day, social_mode, market_mode, payload = _load_payload(
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
         payload = {
             **payload,
             "meta": {
                 **payload["meta"],
-                "social_mode": social_mode,
-                "market_mode": market_mode,
+                "social_mode": social_mode if payload["meta"].get("served_from") != "store" else payload["meta"].get("social_mode", social_mode),
+                "market_mode": market_mode if payload["meta"].get("served_from") != "store" else payload["meta"].get("market_mode", market_mode),
             },
         }
+        # Always echo requested modes for the desk controls; store modes stay in served_from meta.
+        payload["meta"]["social_mode"] = social_mode
+        payload["meta"]["market_mode"] = market_mode
         standings, heat, _key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -357,11 +462,15 @@ def create_app() -> FastAPI:
         sector: str | None = Query(default=None),
         q: str | None = Query(default=None),
         limit: int | None = Query(default=None, ge=1, le=500),
+        prefer_store: bool | None = Query(default=None),
     ) -> StreamingResponse:
-        day = _parse_as_of(as_of)
-        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
-        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
-        payload = _cached_snapshot(day.isoformat(), history_days, social_mode, market_mode)
+        day, social_mode, market_mode, payload = _load_payload(
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
         standings, _heat, _key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -392,18 +501,25 @@ def create_app() -> FastAPI:
         history_days: int = Query(default=14, ge=7, le=60),
         social: str | None = Query(default=None),
         market: str | None = Query(default=None),
+        prefer_store: bool | None = Query(default=None),
     ) -> dict[str, Any]:
-        day = _parse_as_of(as_of)
-        social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
-        market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
-        payload = _cached_snapshot(day.isoformat(), history_days, social_mode, market_mode)
+        _day, social_mode, market_mode, payload = _load_payload(
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
         match = next(
             (r for r in payload["standings"] if str(r["ticker"]).upper() == ticker.upper()),
             None,
         )
         if match is None:
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not in universe")
-        return {"meta": {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode}, "row": match}
+        return {
+            "meta": {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode},
+            "row": match,
+        }
 
     @app.get("/")
     def index() -> FileResponse:

@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from standing.config import ScoringConfig, load_rules
+from standing.domain.scoring.peer_buckets import attach_size_buckets
 from standing.providers.base import MarketProvider
 
 
@@ -40,6 +41,7 @@ def build_universe(
 ) -> UniverseSnapshot:
     rules = rules or load_rules()
     members = apply_admission_rules(market, rules)
+    members = attach_size_buckets(members)
     counts = members.groupby("sector").size().to_dict()
     min_names = int(rules.get("min_names_per_sector", cfg.universe["min_names_per_sector"]))
     low = sorted([s for s, n in counts.items() if n < min_names])
