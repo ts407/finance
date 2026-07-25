@@ -38,17 +38,18 @@
     <label class="field">
       <span>Market</span>
       <select id="market">
-        <option value="stooq" selected>Stooq OHLCV (live)</option>
-        <option value="fixture">Fixture</option>
+        <option value="live" selected>Live (EDGAR/Finnhub)</option>
+        <option value="edgar">SEC EDGAR</option>
+        <option value="stooq">Stooq/Yahoo OHLCV</option>
         <option value="finnhub">Finnhub (+ key)</option>
-        <option value="live">Live auto</option>
+        <option value="fixture">Fixture</option>
       </select>
     </label>
     <label class="field">
       <span>Attention</span>
       <select id="social">
-        <option value="wikipedia" selected>Wikipedia (live)</option>
-        <option value="open">Wiki + Bluesky</option>
+        <option value="open" selected>Wiki + Bluesky</option>
+        <option value="wikipedia">Wikipedia</option>
         <option value="bluesky">Bluesky</option>
         <option value="fixture">Fixture</option>
         <option value="all">All</option>
@@ -173,7 +174,7 @@
 
   <footer class="foot">
     <span id="foot-method">methodology —</span>
-    <span id="foot-posture">stooq market · wikipedia attention</span>
+    <span id="foot-posture">live market · open attention</span>
     <a href="/methodology">Read methodology</a>
   </footer>
 

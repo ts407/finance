@@ -142,13 +142,13 @@ def _cached_snapshot(
 
 
 def _default_social_mode() -> str:
-    mode = os.environ.get("STANDING_SOCIAL", "wikipedia").strip().lower()
-    return mode if mode in SOCIAL_MODES else "wikipedia"
+    mode = os.environ.get("STANDING_SOCIAL", "open").strip().lower()
+    return mode if mode in SOCIAL_MODES else "open"
 
 
 def _default_market_mode() -> str:
-    mode = os.environ.get("STANDING_MARKET", "stooq").strip().lower()
-    return mode if mode in MARKET_MODES else "stooq"
+    mode = os.environ.get("STANDING_MARKET", "live").strip().lower()
+    return mode if mode in MARKET_MODES else "live"
 
 
 def _resolve_mode(value: str | None, allowed: tuple[str, ...], default: str) -> str:
@@ -274,9 +274,9 @@ def _methodology_payload() -> dict[str, Any]:
             "attention_confirmed",
         ],
         "source_posture": (
-            "Desk defaults: market=stooq (real OHLCV overlay) · social=wikipedia. "
-            f"Modes market={list(MARKET_MODES)} social={list(SOCIAL_MODES)}. "
-            "Set FINNHUB_API_KEY for live fundamentals."
+            "Desk defaults: market=live (EDGAR fundamentals + Yahoo OHLCV; Finnhub if key) · "
+            "social=open (Wikipedia + Bluesky). "
+            f"Modes market={list(MARKET_MODES)} social={list(SOCIAL_MODES)}."
         ),
     }
 

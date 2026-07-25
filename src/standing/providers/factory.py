@@ -10,6 +10,7 @@ from standing.providers.base import MarketProvider, SocialProvider
 from standing.providers.bluesky import BlueskySocialProvider
 from standing.providers.cache import DiskCache
 from standing.providers.composite_social import CompositeSocialProvider
+from standing.providers.edgar.market import EdgarMarketProvider
 from standing.providers.finnhub.market import FinnhubMarketProvider
 from standing.providers.market_fixture import FixtureMarketProvider
 from standing.providers.social_fixture import FixtureSocialProvider
@@ -18,10 +19,10 @@ from standing.providers.stooq_overlay import StooqOverlayMarketProvider
 from standing.providers.wikipedia_pageviews import WikipediaPageviewsProvider
 
 SocialMode = Literal["fixture", "wikipedia", "bluesky", "open", "all"]
-MarketMode = Literal["fixture", "stooq", "finnhub", "live"]
+MarketMode = Literal["fixture", "stooq", "edgar", "finnhub", "live"]
 
 SOCIAL_MODES: tuple[str, ...] = ("fixture", "wikipedia", "bluesky", "open", "all")
-MARKET_MODES: tuple[str, ...] = ("fixture", "stooq", "finnhub", "live")
+MARKET_MODES: tuple[str, ...] = ("fixture", "stooq", "edgar", "finnhub", "live")
 
 
 def _live_cache() -> DiskCache | None:
@@ -38,10 +39,11 @@ def build_market_provider(
 ) -> MarketProvider:
     """
     Market modes:
-    - fixture: synthetic fundamentals + returns (CI default)
-    - stooq: fixture fundamentals + live Stooq OHLCV overlay (no API key)
-    - finnhub: Finnhub fundamentals + Stooq OHLCV (needs FINNHUB_API_KEY or cassettes)
-    - live: finnhub if key present, else stooq overlay
+    - fixture: synthetic
+    - stooq: fixture fundamentals + live OHLCV overlay
+    - edgar: SEC EDGAR fundamentals + Yahoo OHLCV (no API key)
+    - finnhub: Finnhub fundamentals + OHLCV (needs FINNHUB_API_KEY or cassettes)
+    - live: finnhub if key else edgar
     """
     key = (mode or os.environ.get("STANDING_MARKET") or os.environ.get("STANDING_MARKET_PROVIDER") or "fixture")
     key = key.strip().lower()
@@ -55,7 +57,7 @@ def build_market_provider(
         if os.environ.get("FINNHUB_API_KEY") or cassette_dir:
             key = "finnhub"
         else:
-            key = "stooq"
+            key = "edgar"
 
     if key == "stooq":
         return StooqOverlayMarketProvider(
@@ -63,6 +65,9 @@ def build_market_provider(
             ohlcv=StooqOHLCV(),
             tickers=tickers,
         )
+
+    if key == "edgar":
+        return EdgarMarketProvider(tickers=tickers, cache=_live_cache() or DiskCache())
 
     if key == "finnhub":
         return FinnhubMarketProvider.from_env(cassette_dir=cassette_dir)
@@ -84,7 +89,9 @@ def build_social_provider(
     cache = _live_cache() if key != "fixture" else None
     fixture = FixtureSocialProvider(history_days=history_days)
     wiki = WikipediaPageviewsProvider(tickers=tickers, history_days=history_days, cache=cache)
-    bluesky = BlueskySocialProvider(tickers=tickers, history_days=history_days, cache=cache)
+    bluesky = BlueskySocialProvider(
+        tickers=tickers, history_days=history_days, cache=cache, max_posts_per_ticker=25
+    )
 
     if key == "fixture":
         return fixture

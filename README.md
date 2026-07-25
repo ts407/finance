@@ -24,16 +24,14 @@ See:
 python -m pip install -e ".[dev]"
 pytest
 
-# Fixture desk (CI / offline)
+# Fixture (CI / offline)
 standing table --as-of 2026-07-22 --market fixture --social fixture
 
-# Live desk — real Wikipedia attention + Stooq OHLCV (no API key)
-standing table --as-of 2026-07-22 --market stooq --social wikipedia
-standing heat  --as-of 2026-07-22 --market stooq --social open --history-days 14
-
-# Web UI defaults to stooq + wikipedia; dropdowns switch modes
+# Live desk — SEC EDGAR fundamentals + Yahoo OHLCV + Wikipedia/Bluesky attention
+standing table --as-of 2026-07-22 --market live --social open
 standing serve --host 127.0.0.1 --port 8000
-# optional: FINNHUB_API_KEY=... for live fundamentals (market=finnhub|live)
+# UI defaults: Market=Live · Attention=Wiki+Bluesky
+# Optional: FINNHUB_API_KEY=... to prefer Finnhub fundamentals under market=live
 ```
 
 ## Web desk URL map

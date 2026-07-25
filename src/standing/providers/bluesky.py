@@ -7,6 +7,7 @@ the economical path for ticker mentions (full getRepo backfill is optional later
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Sequence
@@ -142,20 +143,25 @@ class BlueskySocialProvider(SocialProvider, ProviderMeta):
         neg_hits: dict[tuple[str, str], list[float]] = defaultdict(list)
         likes: dict[tuple[str, str], int] = defaultdict(int)
 
-        for ticker in self._tickers:
+        def _collect(ticker: str) -> list[tuple[str, dict]]:
             try:
                 posts = self._search_ticker(ticker, start, end)
             except RuntimeError:
-                continue
-            for post in posts:
-                record = post.get("record") or {}
-                d = _parse_created(record.get("createdAt") or post.get("indexedAt"))
-                if d is None or d < start or d > end:
-                    continue
-                key = (ticker, d.isoformat())
-                counts[key] += 1
-                neg_hits[key].append(_post_neg_share(str(record.get("text") or "")))
-                likes[key] += int(post.get("likeCount") or 0)
+                return []
+            return [(ticker, post) for post in posts]
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futs = [pool.submit(_collect, t) for t in self._tickers]
+            for fut in as_completed(futs):
+                for ticker, post in fut.result():
+                    record = post.get("record") or {}
+                    d = _parse_created(record.get("createdAt") or post.get("indexedAt"))
+                    if d is None or d < start or d > end:
+                        continue
+                    key = (ticker, d.isoformat())
+                    counts[key] += 1
+                    neg_hits[key].append(_post_neg_share(str(record.get("text") or "")))
+                    likes[key] += int(post.get("likeCount") or 0)
 
         rows = []
         for (ticker, day), n in sorted(counts.items()):

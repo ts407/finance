@@ -1,6 +1,7 @@
 from standing.providers.base import FetchCursor, MarketProvider, ProviderMeta, SocialProvider
 from standing.providers.bluesky import BlueskySocialProvider
 from standing.providers.composite_social import CompositeSocialProvider
+from standing.providers.edgar.market import EdgarMarketProvider
 from standing.providers.factory import (
     MARKET_MODES,
     SOCIAL_MODES,
@@ -18,6 +19,7 @@ from standing.providers.wikipedia_pageviews import WikipediaPageviewsProvider
 __all__ = [
     "BlueskySocialProvider",
     "CompositeSocialProvider",
+    "EdgarMarketProvider",
     "FIXTURE_TICKERS",
     "FetchCursor",
     "FinnhubMarketProvider",
