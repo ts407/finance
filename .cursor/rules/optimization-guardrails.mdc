@@ -1,0 +1,34 @@
+---
+description: Leitplanken für den AktienRadar-Optimierungs-Loop
+alwaysApply: true
+---
+
+# Leitplanken Optimierungs-Loop
+
+- Keine Änderung der produktiven Scoring-Konfiguration ohne durchlaufenen
+  Vergleichsschritt (siehe Skill loop-vergleich-entscheidung).
+- Kein Overfitting an ein kurzes Live-Testfenster: bei widersprüchlichen Signalen
+  zwischen kurz- und mittelfristigem Testfenster ist die konservativere Option zu wählen.
+- Jede Iteration muss rückführbar sein — Rollback auf die vorherige Konfiguration
+  muss jederzeit ohne manuelle Rekonstruktion möglich sein.
+- Transparente Protokollierung hat Vorrang vor Automatisierungsgeschwindigkeit:
+  jeder Zyklus-Durchlauf erzeugt unabhängig vom Ergebnis einen Log-Eintrag.
+- Frontend-Datenerfassung (Skill frontend-datenerfassung) und Trading-Tagebuch
+  (Skill frontend-trading-tagebuch) fließen in Phase "Vergleich" als zusätzliche,
+  aber nicht automatisch score-wirksame Evaluationsbasis ein. Tagebuch-Einträge
+  dienen ausschließlich als qualitative Referenz bei manueller Freigabe, nie als
+  automatischer Trainings- oder Score-Input.
+
+## Zwei Spuren (Track M / Track S)
+
+- **Spur M (Markt/V/Q/M)** darf und soll echte Loop-Zyklen fahren: Momentum-Definition,
+  Lookbacks, Winsorisierung, Peer-Gruppen, Aufnahmeschwellen — auf historischem OHLCV
+  (und Fundamentals, sobald vorhanden). Social-Bezug ist in Spur-M-Hypothesen verboten.
+- **Spur S (Social)** ist analytisch gesperrt, solange keine Live-Social-Daten mit
+  messbarer Dichte existieren. Backfill ist ausgeschlossen. Zulässig ist nur
+  Machbarkeits-Logging (n-Verteilung, sparse_share, Ticker-Zuordnung), keine
+  Score-/Trainings-Hypothesen und kein Shadow auf Social-Parametern.
+- Die Evaluationskette muss zuerst gegen ein bekanntes Marktsignal (Momentum) geeicht
+  werden (`standing track-m-calibrate`), bevor sie auf schwache/teure Signale angesetzt wird.
+- `σ_IC` und daraus `T ≈ (2.80 · σ_IC / μ_IC)²` sind empirisch aus Spur M zu bestimmen;
+  Social-Fensterlänge wird nicht auf Literaturannahmen festgelegt.

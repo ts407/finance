@@ -1,0 +1,23 @@
+id: H20260722-06
+cycle_id: C20260722-03
+created_utc: '2026-07-23T10:41:05.195192+00:00'
+basis: 'Cycle C20260722-03: prior cycles rejected aggressive cuts on turnover and/or
+  lacked forward-return evidence. Offline tilt_max=9.5 stays under safety gate 30%
+  (turnover=18.5%) with lower mean|tilt| (5.73→5.44); evaluate via next-weekday ret_1m
+  forward proxy in shadow/vergleich.'
+change:
+- path: social_tilt.tilt_max
+  to: 9.5
+prediction:
+  metric: mean_forward_spearman_lift
+  expected_direction: non_negative_with_ci
+  secondary_metric: ranking_turnover_vs_baseline
+  expected_secondary: below_40%_gate
+  rationale: tilt_max=9.5 — conservative untested step for forward-proxy eval.
+shadow_config: artifacts/optimization/configs/H20260722-06_20260723T104105Z.yaml
+productive_config: config/scoring.yaml
+handoff: loop-analyse-hypothese
+status: decision_reject
+shadow_report: artifacts/optimization/shadow/H20260722-06/shadow_report_2026-07-14_2026-07-22.json
+shadow_capture: artifacts/optimization/shadow/H20260722-06/capture_2026-07-14_2026-07-22.csv
+decision_path: artifacts/optimization/decisions/H20260722-06_decision.json

@@ -1,0 +1,269 @@
+{
+  "phase": "loop-analyse-hypothese",
+  "cycle_id": "C20260722-02",
+  "productive_config": {
+    "path": "config/scoring.yaml",
+    "methodology_version": "2.0.0",
+    "score_kind": "editorial_descriptive",
+    "placeholder": true,
+    "base": {
+      "pillar_weights": {
+        "value": 0.3333,
+        "quality": 0.3333,
+        "momentum": 0.3334
+      },
+      "peer_frame": "sector",
+      "winsorize": {
+        "lower": 0.01,
+        "upper": 0.99
+      },
+      "quality_margin": "operating",
+      "momentum_secondary_global": true
+    },
+    "social_tilt": {
+      "tilt_max": 10,
+      "beta": 1.5,
+      "shape": "tanh",
+      "symmetric": true,
+      "dampener_neg_share_pivot": 0.5
+    },
+    "shrinkage": {
+      "k": 10,
+      "prior": 50,
+      "display_badges": {
+        "sparse_below": 5,
+        "ok_at": 15
+      }
+    },
+    "social_pipeline": {
+      "sources": [
+        "reddit",
+        "stocktwits"
+      ],
+      "include_wsb": true,
+      "source_cap_per_ticker_day": 0.5,
+      "mention_transform": "log1p_then_universe_share",
+      "reddit_comments": false,
+      "sentiment_engagement_weight": "1+log1p(upvotes)"
+    }
+  },
+  "baseline": {
+    "as_of": "2026-07-22",
+    "universe_id": "fixture-gics11-v1",
+    "methodology_version": "2.0.0",
+    "score_kind": "editorial_descriptive",
+    "placeholder": true,
+    "n_names": 54,
+    "spearman_final_vs_composite": 0.926066639058236,
+    "mean_abs_tilt": 5.730199234574004,
+    "max_abs_tilt": 9.04160407798967,
+    "mean_confidence_c": 0.9895190205988117,
+    "mean_n": 1255.7314814814815,
+    "sparse_share": 0.0,
+    "thin_share": 0.0,
+    "ok_share": 1.0,
+    "low_confidence_sectors": [
+      "Communication Services",
+      "Consumer Discretionary",
+      "Consumer Staples",
+      "Energy",
+      "Financials",
+      "Health Care",
+      "Industrials",
+      "Information Technology",
+      "Materials",
+      "Real Estate",
+      "Utilities"
+    ]
+  },
+  "sensitivity": [
+    {
+      "label": "shrinkage.k=15",
+      "change": {
+        "shrinkage.k": 15
+      },
+      "spearman_final_vs_base": 0.926066639058236,
+      "ranking_turnover_vs_baseline": 0.0,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.7123121300414335,
+      "tilt_vs_baseline_mae": 0.01788710453256897
+    },
+    {
+      "label": "shrinkage.k=20",
+      "change": {
+        "shrinkage.k": 20
+      },
+      "spearman_final_vs_base": 0.9271345467182842,
+      "ranking_turnover_vs_baseline": 0.037037037037037035,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.694481421046698,
+      "tilt_vs_baseline_mae": 0.03571781352730476
+    },
+    {
+      "label": "sparse_below=8",
+      "change": {
+        "shrinkage.display_badges.sparse_below": 8
+      },
+      "spearman_final_vs_base": 0.926066639058236,
+      "ranking_turnover_vs_baseline": 0.0,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.730199234574004,
+      "tilt_vs_baseline_mae": 0.0
+    },
+    {
+      "label": "tilt_max=8",
+      "change": {
+        "social_tilt.tilt_max": 8
+      },
+      "spearman_final_vs_base": 0.9473866526999127,
+      "ranking_turnover_vs_baseline": 0.5185185185185185,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 4.584159387659203,
+      "tilt_vs_baseline_mae": 1.1460398469148008
+    },
+    {
+      "label": "tilt_max=6",
+      "change": {
+        "social_tilt.tilt_max": 6
+      },
+      "spearman_final_vs_base": 0.965960618072894,
+      "ranking_turnover_vs_baseline": 0.7777777777777778,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 3.4381195407444016,
+      "tilt_vs_baseline_mae": 2.2920796938296015
+    },
+    {
+      "label": "beta=1.0",
+      "change": {
+        "social_tilt.beta": 1.0
+      },
+      "spearman_final_vs_base": 0.9501708405278956,
+      "ranking_turnover_vs_baseline": 0.6296296296296297,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 4.36260954395212,
+      "tilt_vs_baseline_mae": 1.3675896906218847
+    },
+    {
+      "label": "tilt_max=9.5",
+      "change": {
+        "social_tilt.tilt_max": 9.5
+      },
+      "spearman_final_vs_base": 0.9298043158684047,
+      "ranking_turnover_vs_baseline": 0.18518518518518517,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.443689272845304,
+      "tilt_vs_baseline_mae": 0.2865099617287003
+    },
+    {
+      "label": "tilt_max=9",
+      "change": {
+        "social_tilt.tilt_max": 9
+      },
+      "spearman_final_vs_base": 0.9359829244729693,
+      "ranking_turnover_vs_baseline": 0.2777777777777778,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.157179311116604,
+      "tilt_vs_baseline_mae": 0.5730199234574004
+    },
+    {
+      "label": "tilt_max=8.5",
+      "change": {
+        "social_tilt.tilt_max": 8.5
+      },
+      "spearman_final_vs_base": 0.941284323213923,
+      "ranking_turnover_vs_baseline": 0.3888888888888889,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 4.870669349387903,
+      "tilt_vs_baseline_mae": 0.8595298851861005
+    },
+    {
+      "label": "beta=1.4",
+      "change": {
+        "social_tilt.beta": 1.4
+      },
+      "spearman_final_vs_base": 0.929041524682656,
+      "ranking_turnover_vs_baseline": 0.1111111111111111,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.497751108357665,
+      "tilt_vs_baseline_mae": 0.23244812621633854
+    },
+    {
+      "label": "beta=1.3",
+      "change": {
+        "social_tilt.beta": 1.3
+      },
+      "spearman_final_vs_base": 0.9326266432556749,
+      "ranking_turnover_vs_baseline": 0.25925925925925924,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.246070318425196,
+      "tilt_vs_baseline_mae": 0.4841289161488082
+    },
+    {
+      "label": "beta=1.2",
+      "change": {
+        "social_tilt.beta": 1.2
+      },
+      "spearman_final_vs_base": 0.937699204640904,
+      "ranking_turnover_vs_baseline": 0.37037037037037035,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 4.973803049364444,
+      "tilt_vs_baseline_mae": 0.7563961852095594
+    },
+    {
+      "label": "dampener=0.40",
+      "change": {
+        "social_tilt.dampener_neg_share_pivot": 0.4
+      },
+      "spearman_final_vs_base": 0.92660059288826,
+      "ranking_turnover_vs_baseline": 0.037037037037037035,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.687255343618833,
+      "tilt_vs_baseline_mae": 0.04294389095516947
+    },
+    {
+      "label": "source_cap=0.40",
+      "change": {
+        "social_pipeline.source_cap_per_ticker_day": 0.4
+      },
+      "spearman_final_vs_base": 0.9253038478724872,
+      "ranking_turnover_vs_baseline": 0.2037037037037037,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "mean_abs_tilt": 5.728038386870915,
+      "tilt_vs_baseline_mae": 0.13410161744258645
+    }
+  ],
+  "snapshot_csv": "artifacts/optimization/baseline/standings_2026-07-22.csv",
+  "notes": [
+    "No forward-return performance log exists yet; this is a baseline/diagnose cycle.",
+    "Social is a bounded tilt, not a fourth pillar weight.",
+    "All scoring parameters remain placeholder=true (fixture calibration)."
+  ]
+}

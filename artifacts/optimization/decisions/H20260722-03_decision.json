@@ -1,0 +1,51 @@
+{
+  "phase": "loop-vergleich-entscheidung",
+  "hypothesis_id": "H20260722-03",
+  "cycle_id": "C20260722-01",
+  "shadow_report": "artifacts/optimization/shadow/H20260722-03/shadow_report_2026-07-14_2026-07-22.json",
+  "timestamp_utc": "2026-07-23T05:35:43.424022+00:00",
+  "decision": "reject",
+  "accepted": false,
+  "checks": {
+    "spearman_lift_ge_min": true,
+    "turnover_le_max": false,
+    "tilt_decreased": true,
+    "lift_ci_excludes_zero": true,
+    "placeholder_allows_promote": false,
+    "social_gap_not_worse": true
+  },
+  "thresholds": {
+    "min_spearman_lift": 0.02,
+    "max_mean_ranking_turnover": 0.4,
+    "require_tilt_decrease": true,
+    "require_ci_excludes_zero_lift": true,
+    "allow_promote_when_placeholder": false
+  },
+  "metrics": {
+    "spearman_lift": 0.027212599464673137,
+    "spearman_lift_bootstrap": {
+      "mean": 0.027212599464673408,
+      "ci_low": 0.022488768799208962,
+      "ci_high": 0.03265130930054917,
+      "n": 7
+    },
+    "ranking_turnover": 0.6296296296296297,
+    "ranking_turnover_bootstrap": {
+      "mean": 0.6296296296296297,
+      "ci_low": 0.5661375661375662,
+      "ci_high": 0.7037037037037038,
+      "n": 7
+    },
+    "tilt_delta": -1.1458580592888366,
+    "social_gap": {
+      "productive_turnover_full_vs_gap": 0.9629629629629629,
+      "shadow_turnover_full_vs_gap": 0.9629629629629629,
+      "gap_turnover_delta_shadow_minus_prod": 0.0
+    }
+  },
+  "rationale": "Productive config remains placeholder=true — auto-promotion blocked by epistemic lock. Ranking turnover 63.0% exceeds max 40%. Spearman lift +0.0272 (bootstrap CI [+0.0225, +0.0327]) meets threshold but is only a composite-alignment proxy — not forward-return evidence. Social-gap turnover: prod=96.3%, shadow=96.3%. No trading-journal entries available; qualitative diary reference skipped. Forward-return rank correlation / top-percentile hit-rate unavailable on fixtures — decision uses proxy metrics only.",
+  "promote_to_productive": false,
+  "next_phase": "loop-analyse-hypothese",
+  "productive_config_unchanged": true,
+  "decision_path": "artifacts/optimization/decisions/H20260722-03_decision.json"
+}

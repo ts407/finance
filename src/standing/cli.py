@@ -280,6 +280,284 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_loop_analyse(args: argparse.Namespace) -> int:
+    """Baseline diagnostics + hypothesis artifacts for the next optimization cycle."""
+    from standing.optimization.analyse import write_baseline_report
+    from standing.optimization.cycle import formulate_hypotheses, next_cycle_id, prior_reject_summary
+    from standing.optimization.hypotheses import write_deferred_hypothesis, write_hypothesis
+    from standing.optimization.log import append_log, latest_entry
+    from standing.optimization.paths import ensure_layout
+
+    ensure_layout()
+    as_of = _parse_date(args.as_of)
+    prior = latest_entry()
+    rejects = prior_reject_summary()
+    cycle_id = next_cycle_id(as_of)
+    fine = bool(rejects) or args.fine
+    console.print(
+        "[bold]loop-analyse-hypothese[/bold] — "
+        f"cycle={cycle_id}  as_of={as_of}  prior_rejects={len(rejects)}  fine={fine}"
+    )
+    if prior:
+        console.print(
+            f"Prior log: phase={prior.get('phase')} decision={prior.get('decision')} "
+            f"hypothesis={prior.get('hypothesis_id', '-')}"
+        )
+
+    report = write_baseline_report(
+        as_of=as_of,
+        history_days=args.history_days,
+        cycle_id=cycle_id,
+        fine_sensitivity=fine,
+    )
+    baseline = report["baseline"]
+    console.print(
+        f"Baseline n={baseline['n_names']}  "
+        f"spearman(final,composite)={baseline['spearman_final_vs_composite']:.4f}  "
+        f"sparse={baseline['sparse_share']:.1%}  "
+        f"mean|tilt|={baseline['mean_abs_tilt']:.2f}"
+    )
+
+    sens = sorted(
+        report["sensitivity"],
+        key=lambda row: (row["ranking_turnover_vs_baseline"], row["tilt_vs_baseline_mae"]),
+    )
+    console.print("Sensitivity (lowest turnover first, gated view):")
+    for row in sens[:8]:
+        console.print(
+            f"  {row['label']}: turnover={row['ranking_turnover_vs_baseline']:.1%}  "
+            f"spearman={row['spearman_final_vs_base']:.4f}  "
+            f"|tilt|={row['mean_abs_tilt']:.2f}"
+        )
+
+    hyp_specs, deferred_specs = formulate_hypotheses(
+        cycle_id=cycle_id,
+        as_of=as_of,
+        baseline=baseline,
+        sensitivity=report["sensitivity"],
+    )
+
+    written: list[dict[str, str]] = []
+    for spec in hyp_specs:
+        hyp_path, cfg_path = write_hypothesis(
+            hypothesis_id=spec["hypothesis_id"],
+            basis=spec["basis"],
+            overrides=spec["overrides"],
+            prediction=spec["prediction"],
+            cycle_id=cycle_id,
+        )
+        written.append(
+            {"id": spec["hypothesis_id"], "hypothesis": str(hyp_path), "config": str(cfg_path)}
+        )
+        console.print(
+            f"Hypothesis {spec['hypothesis_id']} {spec['overrides']} → {hyp_path}"
+        )
+
+    deferred_ids: list[str] = []
+    for deferred in deferred_specs:
+        deferred_path = write_deferred_hypothesis(
+            hypothesis_id=deferred["hypothesis_id"],
+            reason=deferred["reason"],
+            overrides=deferred["overrides"],
+            cycle_id=cycle_id,
+        )
+        deferred_ids.append(deferred["hypothesis_id"])
+        console.print(f"Deferred {deferred['hypothesis_id']} → {deferred_path}")
+
+    # Relativize report path for log portability
+    report_path = report["report_path"]
+    if report_path.startswith("/"):
+        from standing.config import ROOT
+
+        try:
+            from pathlib import Path as _P
+
+            report_path = str(_P(report_path).resolve().relative_to(ROOT.resolve()))
+        except Exception:
+            pass
+
+    append_log(
+        {
+            "phase": "loop-analyse-hypothese",
+            "cycle_id": cycle_id,
+            "decision": "hypotheses_formulated",
+            "as_of": as_of.isoformat(),
+            "prior_rejects": [
+                {"hypothesis_id": r.get("hypothesis_id"), "turnover": (r.get("metrics") or {}).get("ranking_turnover")}
+                for r in rejects[-4:]
+            ],
+            "baseline": {
+                "n_names": baseline["n_names"],
+                "spearman_final_vs_composite": baseline["spearman_final_vs_composite"],
+                "sparse_share": baseline["sparse_share"],
+                "mean_abs_tilt": baseline["mean_abs_tilt"],
+                "mean_confidence_c": baseline["mean_confidence_c"],
+                "mean_n": baseline["mean_n"],
+            },
+            "hypotheses": [w["id"] for w in written],
+            "deferred_hypotheses": deferred_ids,
+            "report_path": report_path,
+            "handoff": "loop-live-test-shadow",
+            "productive_config_unchanged": True,
+        }
+    )
+    console.print("Appended log entry; handoff → loop-live-test-shadow")
+    console.print(f"Report: {report_path}")
+    return 0
+
+
+def cmd_loop_shadow(args: argparse.Namespace) -> int:
+    """Shadow live-test: productive vs isolated hypothesis configs on shared data."""
+    from standing.optimization.log import append_log
+    from standing.optimization.cycle import latest_ready_hypothesis_ids
+    from standing.optimization.paths import ensure_layout
+    from standing.optimization.shadow import run_shadow_test
+
+    ensure_layout()
+    end_as_of = _parse_date(args.as_of)
+    hypothesis_ids = args.hypothesis or latest_ready_hypothesis_ids() or [
+        "H20260722-03",
+        "H20260722-04",
+    ]
+    console.print(
+        "[bold]loop-live-test-shadow[/bold] — "
+        f"end={end_as_of}  days={args.days}  hypotheses={', '.join(hypothesis_ids)}"
+    )
+
+    results: list[dict] = []
+    for hid in hypothesis_ids:
+        summary = run_shadow_test(
+            hypothesis_id=hid,
+            end_as_of=end_as_of,
+            n_days=args.days,
+            history_days=args.history_days,
+        )
+        agg = summary["aggregates"]
+        console.print(
+            f"{hid}: turnover={agg['mean_ranking_turnover_vs_productive']:.1%}  "
+            f"spearman_shadow={agg['mean_spearman_final_vs_composite_shadow']:.4f} "
+            f"(prod={agg['mean_spearman_final_vs_composite_productive']:.4f})  "
+            f"|tilt| {agg['mean_abs_tilt_productive']:.2f}→{agg['mean_abs_tilt_shadow']:.2f}  "
+            f"fwd_lift={agg.get('mean_forward_spearman_lift', float('nan')):+.4f}"
+        )
+        append_log(
+            {
+                "phase": "loop-live-test-shadow",
+                "cycle_id": summary.get("cycle_id"),
+                "hypothesis_id": hid,
+                "decision": "shadow_complete",
+                "window": summary["window"],
+                "aggregates": agg,
+                "report_path": summary["report_path"],
+                "handoff": "loop-vergleich-entscheidung",
+                "productive_config_unchanged": True,
+            }
+        )
+        results.append(summary)
+
+    console.print(f"Completed {len(results)} shadow test(s); handoff → loop-vergleich-entscheidung")
+    return 0
+
+
+def cmd_loop_vergleich(args: argparse.Namespace) -> int:
+    """Compare shadow vs productive and record accept/reject (no silent promote)."""
+    from standing.optimization.log import append_log
+    from standing.optimization.cycle import latest_ready_hypothesis_ids
+    from standing.optimization.paths import ensure_layout
+    from standing.optimization.vergleich import run_vergleich
+
+    ensure_layout()
+    hypothesis_ids = args.hypothesis or latest_ready_hypothesis_ids() or [
+        "H20260722-03",
+        "H20260722-04",
+    ]
+    console.print(
+        "[bold]loop-vergleich-entscheidung[/bold] — "
+        f"hypotheses={', '.join(hypothesis_ids)}"
+    )
+    for hid in hypothesis_ids:
+        out = run_vergleich(hypothesis_id=hid)
+        console.print(
+            f"{hid}: [bold]{out['decision'].upper()}[/bold]  "
+            f"accept_candidate={out.get('accept_candidate')}  "
+            f"fwd_lift={out['metrics'].get('forward_spearman_lift_bootstrap', {}).get('mean', float('nan')):+.4f}  "
+            f"turnover={out['metrics']['ranking_turnover']:.1%}  "
+            f"promote={out['promote_to_productive']}"
+        )
+        console.print(f"  {out['rationale']}")
+        append_log(
+            {
+                "phase": "loop-vergleich-entscheidung",
+                "cycle_id": out.get("cycle_id"),
+                "hypothesis_id": hid,
+                "decision": out["decision"],
+                "accept_candidate": out.get("accept_candidate"),
+                "checks": out["checks"],
+                "metrics": {
+                    "spearman_lift": out["metrics"]["spearman_lift"],
+                    "ranking_turnover": out["metrics"]["ranking_turnover"],
+                    "tilt_delta": out["metrics"]["tilt_delta"],
+                    "spearman_lift_bootstrap": out["metrics"]["spearman_lift_bootstrap"],
+                    "forward_spearman_lift_bootstrap": out["metrics"].get(
+                        "forward_spearman_lift_bootstrap"
+                    ),
+                    "top_decile_excess_lift_bootstrap": out["metrics"].get(
+                        "top_decile_excess_lift_bootstrap"
+                    ),
+                },
+                "promote_to_productive": out["promote_to_productive"],
+                "decision_path": out["decision_path"],
+                "rationale": out["rationale"],
+                "handoff": "loop-analyse-hypothese",
+                "productive_config_unchanged": out.get("productive_config_unchanged", True),
+            }
+        )
+    console.print("Logged decisions; next cycle → loop-analyse-hypothese")
+    return 0
+
+
+def cmd_track_m_calibrate(args: argparse.Namespace) -> int:
+    """Track M: validate IC apparatus on multi-year OHLCV momentum."""
+    from standing.optimization.log import append_log
+    from standing.research.momentum_calibrate import run_momentum_calibration
+
+    console.print(
+        "[bold]track-m-calibrate[/bold] — multi-year OHLCV momentum IC / σ_IC "
+        f"(horizon={args.horizon_days}d, network={not args.offline})"
+    )
+    report = run_momentum_calibration(
+        horizon_days=args.horizon_days,
+        allow_network=not args.offline,
+    )
+    status = report.get("status")
+    product = report.get("product_momentum_v2") or {}
+    power = report.get("sigma_ic_for_power") or {}
+    console.print(f"status={status}  apparatus_passed={report.get('apparatus_check', {}).get('passed')}")
+    if product:
+        console.print(
+            f"product_momentum_v2: μ_IC={product.get('mean_ic')}  "
+            f"σ_IC={product.get('sigma_ic')}  t={product.get('tstat')}  "
+            f"n={product.get('n_ic_obs')}  T_80%={product.get('power_days_80')}"
+        )
+    console.print(f"power sizing: {power}")
+    console.print(f"report: {report.get('report_path')}")
+    append_log(
+        {
+            "phase": "track-m-calibrate",
+            "track": "M",
+            "decision": status,
+            "apparatus_passed": report.get("apparatus_check", {}).get("passed"),
+            "product_momentum_v2": product,
+            "sigma_ic_for_power": power,
+            "report_path": report.get("report_path"),
+            "handoff": "loop-analyse-hypothese",
+            "social_locked": True,
+            "productive_config_unchanged": True,
+        }
+    )
+    return 0 if status != "failed_empty_panel" else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -355,6 +633,61 @@ def build_parser() -> argparse.ArgumentParser:
         help="uvicorn access/log level (default: info)",
     )
     w.set_defaults(func=cmd_serve)
+
+    la = sub.add_parser(
+        "loop-analyse",
+        help="Optimization cycle: baseline diagnostics + formulate hypotheses",
+    )
+    add_common(la)
+    la.add_argument(
+        "--fine",
+        action="store_true",
+        help="Force fine-grained sensitivity grid (also auto-enabled after rejects)",
+    )
+    la.set_defaults(func=cmd_loop_analyse)
+
+    ls = sub.add_parser(
+        "loop-shadow",
+        help="Optimization cycle: shadow live-test productive vs hypothesis configs",
+    )
+    add_common(ls)
+    ls.add_argument(
+        "--hypothesis",
+        action="append",
+        default=None,
+        help="Hypothesis ID (repeatable). Default: H20260722-03 H20260722-04",
+    )
+    ls.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Number of trading days in the shadow window (default: 7)",
+    )
+    ls.set_defaults(func=cmd_loop_shadow)
+
+    lv = sub.add_parser(
+        "loop-vergleich",
+        help="Optimization cycle: compare shadow results and accept/reject",
+    )
+    lv.add_argument(
+        "--hypothesis",
+        action="append",
+        default=None,
+        help="Hypothesis ID (repeatable). Default: H20260722-03 H20260722-04",
+    )
+    lv.set_defaults(func=cmd_loop_vergleich)
+
+    tm = sub.add_parser(
+        "track-m-calibrate",
+        help="Track M: calibrate IC apparatus on multi-year OHLCV momentum",
+    )
+    tm.add_argument("--horizon-days", type=int, default=21, help="Forward return horizon")
+    tm.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use only cached/cassette OHLCV (no network fetch)",
+    )
+    tm.set_defaults(func=cmd_track_m_calibrate)
 
     return p
 

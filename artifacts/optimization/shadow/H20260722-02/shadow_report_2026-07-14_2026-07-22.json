@@ -1,0 +1,230 @@
+{
+  "phase": "loop-live-test-shadow",
+  "hypothesis_id": "H20260722-02",
+  "cycle_id": "C20260722-02",
+  "status": "shadow_complete",
+  "window": {
+    "n_trading_days": 7,
+    "start": "2026-07-14",
+    "end": "2026-07-22",
+    "dates": [
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+      "2026-07-20",
+      "2026-07-21",
+      "2026-07-22"
+    ],
+    "data_source": "fixture_shared_fetch",
+    "note": "Fixtures stand in for live data; productive and shadow scored on identical market+social fetches per day."
+  },
+  "productive_config": "config/scoring.yaml",
+  "shadow_config": "artifacts/optimization/configs/H20260722-02_20260723T080559Z.yaml",
+  "change": [
+    {
+      "path": "social_tilt.tilt_max",
+      "to": 9
+    }
+  ],
+  "prediction": {
+    "metric": "ranking_turnover_vs_baseline",
+    "expected_direction": "below_40%_gate",
+    "secondary_metric": "spearman_final_vs_composite",
+    "expected_secondary": "increase",
+    "rationale": "tilt_max=9 selected as conservative step after prior overshoot."
+  },
+  "productive_daily": [
+    {
+      "as_of": "2026-07-14",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9437285722355019,
+      "mean_abs_tilt": 5.72896077902041,
+      "mean_confidence_c": 0.9890128036204053,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    },
+    {
+      "as_of": "2026-07-15",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.927373253600573,
+      "mean_abs_tilt": 5.728858938727959,
+      "mean_confidence_c": 0.9890349463610758,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    },
+    {
+      "as_of": "2026-07-16",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.8950438591893383,
+      "mean_abs_tilt": 5.728908294023814,
+      "mean_confidence_c": 0.9890465421772416,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    },
+    {
+      "as_of": "2026-07-17",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.8884991731601113,
+      "mean_abs_tilt": 5.728905908976885,
+      "mean_confidence_c": 0.9890452831870418,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    },
+    {
+      "as_of": "2026-07-20",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9273992227381425,
+      "mean_abs_tilt": 5.729942010476147,
+      "mean_confidence_c": 0.9894387085024432,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    },
+    {
+      "as_of": "2026-07-21",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.8698172103082359,
+      "mean_abs_tilt": 5.7292569093101235,
+      "mean_confidence_c": 0.989250141580211,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    },
+    {
+      "as_of": "2026-07-22",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.926066639058236,
+      "mean_abs_tilt": 5.730199234574004,
+      "mean_confidence_c": 0.9895190205988117,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0
+    }
+  ],
+  "shadow_daily": [
+    {
+      "as_of": "2026-07-14",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9535646379879767,
+      "mean_abs_tilt": 5.1560647011183685,
+      "max_abs_tilt": 8.137733600942788,
+      "mean_confidence_c": 0.9890128036204053,
+      "mean_n": 1251.1851851851852,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.4074074074074074,
+      "spearman_final_productive_vs_shadow": 0.9984753192300361,
+      "mean_abs_final_delta": 0.5618227266151413
+    },
+    {
+      "as_of": "2026-07-15",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9390392850744383,
+      "mean_abs_tilt": 5.155973044855161,
+      "max_abs_tilt": 8.138075709585122,
+      "mean_confidence_c": 0.9890349463610758,
+      "mean_n": 1244.5185185185185,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.35185185185185186,
+      "spearman_final_productive_vs_shadow": 0.9982466171145415,
+      "mean_abs_final_delta": 0.5728858938727955
+    },
+    {
+      "as_of": "2026-07-16",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9156690978408453,
+      "mean_abs_tilt": 5.156017464621432,
+      "max_abs_tilt": 8.137095180874644,
+      "mean_confidence_c": 0.9890465421772416,
+      "mean_n": 1231.6296296296296,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.5,
+      "spearman_final_productive_vs_shadow": 0.9977129788450542,
+      "mean_abs_final_delta": 0.5728908294023817
+    },
+    {
+      "as_of": "2026-07-17",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9048610440944215,
+      "mean_abs_tilt": 5.156015318079198,
+      "max_abs_tilt": 8.137940741138994,
+      "mean_confidence_c": 0.9890452831870417,
+      "mean_n": 1226.1203703703704,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.46296296296296297,
+      "spearman_final_productive_vs_shadow": 0.9983990851915379,
+      "mean_abs_final_delta": 0.5728905908976887
+    },
+    {
+      "as_of": "2026-07-20",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.939940917258072,
+      "mean_abs_tilt": 5.156947809428532,
+      "max_abs_tilt": 8.136477369523064,
+      "mean_confidence_c": 0.9894387085024432,
+      "mean_n": 1239.5,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.2777777777777778,
+      "spearman_final_productive_vs_shadow": 0.9982466171145415,
+      "mean_abs_final_delta": 0.5729942010476156
+    },
+    {
+      "as_of": "2026-07-21",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.8873553849703639,
+      "mean_abs_tilt": 5.156331218379109,
+      "max_abs_tilt": 8.13653674893105,
+      "mean_confidence_c": 0.989250141580211,
+      "mean_n": 1230.5277777777778,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.5,
+      "spearman_final_productive_vs_shadow": 0.9980941490375451,
+      "mean_abs_final_delta": 0.5729256909310128
+    },
+    {
+      "as_of": "2026-07-22",
+      "n_names": 54,
+      "spearman_final_vs_composite": 0.9359829244729693,
+      "mean_abs_tilt": 5.157179311116604,
+      "max_abs_tilt": 8.137443670190702,
+      "mean_confidence_c": 0.9895190205988117,
+      "mean_n": 1255.7314814814815,
+      "sparse_share": 0.0,
+      "thin_share": 0.0,
+      "ok_share": 1.0,
+      "ranking_turnover_vs_productive": 0.2777777777777778,
+      "spearman_final_productive_vs_shadow": 0.9983990851915379,
+      "mean_abs_final_delta": 0.5730199234574006
+    }
+  ],
+  "aggregates": {
+    "mean_ranking_turnover_vs_productive": 0.3968253968253968,
+    "mean_spearman_final_vs_composite_shadow": 0.9252018988141552,
+    "mean_spearman_final_vs_composite_productive": 0.91113256147002,
+    "mean_abs_tilt_shadow": 5.156361266799771,
+    "mean_abs_tilt_productive": 5.729290296444191,
+    "mean_abs_final_delta": 0.5713471223177194,
+    "mean_spearman_final_productive_vs_shadow": 0.9982248359606848
+  },
+  "report_path": "artifacts/optimization/shadow/H20260722-02/shadow_report_2026-07-14_2026-07-22.json",
+  "capture_path": "artifacts/optimization/shadow/H20260722-02/capture_2026-07-14_2026-07-22.csv",
+  "daily_metrics_path": "artifacts/optimization/shadow/H20260722-02/daily_metrics_2026-07-14_2026-07-22.csv",
+  "handoff": "loop-vergleich-entscheidung",
+  "productive_config_unchanged": true
+}

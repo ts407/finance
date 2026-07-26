@@ -1,0 +1,11 @@
+id: H20260722-01
+cycle_id: C20260722-03
+created_utc: '2026-07-23T10:41:05.199628+00:00'
+basis: shrinkage.k increases remain deferred on fixture mean_n≫k (mean_n=1256); revisit
+  with sparse live Social.
+change:
+- path: shrinkage.k
+  to: 15
+status: deferred
+handoff: null
+productive_config: config/scoring.yaml

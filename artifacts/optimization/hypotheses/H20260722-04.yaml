@@ -1,0 +1,23 @@
+id: H20260722-04
+cycle_id: C20260722-01
+created_utc: '2026-07-23T05:28:29.846095+00:00'
+basis: 'Second-largest tilt-shape lever: beta=1.0 shows turnover=63.0% and higher
+  final↔composite Spearman vs baseline. Chosen over shrinkage.k because fixture mean_n=1256
+  makes k:10→15 nearly inert (offline turnover≈0%).'
+change:
+- path: social_tilt.beta
+  to: 1.0
+prediction:
+  metric: ranking_turnover_vs_baseline
+  expected_direction: material_but_less_than_tilt_max_6
+  secondary_metric: spearman_final_vs_composite
+  expected_secondary: increase
+  rationale: beta:1.5→1.0 flattens tanh response around S_used=50 without changing
+    tilt_max.
+shadow_config: artifacts/optimization/configs/H20260722-04_20260723T052829Z.yaml
+productive_config: config/scoring.yaml
+handoff: loop-analyse-hypothese
+status: decision_reject
+shadow_report: artifacts/optimization/shadow/H20260722-04/shadow_report_2026-07-14_2026-07-22.json
+shadow_capture: artifacts/optimization/shadow/H20260722-04/capture_2026-07-14_2026-07-22.csv
+decision_path: artifacts/optimization/decisions/H20260722-04_decision.json

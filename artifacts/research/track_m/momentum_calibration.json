@@ -1,0 +1,141 @@
+{
+  "track": "M",
+  "phase": "apparatus_calibration",
+  "status": "ok",
+  "horizon_days": 21,
+  "meta": {
+    "n_requested": 54,
+    "n_with_bars": 54,
+    "tickers_missing": [],
+    "source": {
+      "name": "yahoo-chart-daily",
+      "cassette_dir": null,
+      "cache_dir": "artifacts/market/ohlcv",
+      "allow_network": true,
+      "period1": 1420070400
+    },
+    "n_rebalance_dates": 132,
+    "n_panel_rows": 7074,
+    "date_start": "2015-07-31",
+    "date_end": "2026-05-29"
+  },
+  "apparatus_check": {
+    "signal": "product_momentum_v2",
+    "passed": true,
+    "rule": "n_ic_obs>=12 AND |mean_ic|>0.01 AND tstat>1.5",
+    "interpretation": "If product momentum IC is not found in multi-year OHLCV, the evaluation chain is suspect. If found at plausible magnitude, the meter is calibrated before applying it to weak/expensive Social."
+  },
+  "product_momentum_v2": {
+    "signal": "product_momentum_v2",
+    "horizon_days": 21,
+    "n_dates": 131,
+    "n_ic_obs": 131,
+    "mean_ic": 0.03295653239006617,
+    "sigma_ic": 0.15408869652912424,
+    "tstat": 2.447971607624282,
+    "power_days_80": 171.3857090271978,
+    "ic_positive_share": 0.6030534351145038
+  },
+  "best_abs_mean_ic": {
+    "signal": "product_momentum_v2",
+    "horizon_days": 21,
+    "n_dates": 131,
+    "n_ic_obs": 131,
+    "mean_ic": 0.03295653239006617,
+    "sigma_ic": 0.15408869652912424,
+    "tstat": 2.447971607624282,
+    "power_days_80": 171.3857090271978,
+    "ic_positive_share": 0.6030534351145038
+  },
+  "all_signals": [
+    {
+      "signal": "ret_1m_raw",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.025431617049073475,
+      "sigma_ic": 0.1955864766978183,
+      "tstat": 1.488232552652251,
+      "power_days_80": 463.7092495150714,
+      "ic_positive_share": 0.5801526717557252
+    },
+    {
+      "signal": "ret_3m_raw",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.023294154274998292,
+      "sigma_ic": 0.24873659301899906,
+      "tstat": 1.0718719694512089,
+      "power_days_80": 893.9259211531279,
+      "ic_positive_share": 0.6106870229007634
+    },
+    {
+      "signal": "ret_6m_raw",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.023912755671361457,
+      "sigma_ic": 0.2563446969788757,
+      "tstat": 1.0676795801019476,
+      "power_days_80": 900.9599479899323,
+      "ic_positive_share": 0.6259541984732825
+    },
+    {
+      "signal": "ret_1m_sector_pct",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.0292341537927581,
+      "sigma_ic": 0.12237413691175666,
+      "tstat": 2.7342393762553554,
+      "power_days_80": 137.37708334256416,
+      "ic_positive_share": 0.5648854961832062
+    },
+    {
+      "signal": "ret_3m_sector_pct",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.01658791707390219,
+      "sigma_ic": 0.1558684505932393,
+      "tstat": 1.2180616925915961,
+      "power_days_80": 692.2274039708485,
+      "ic_positive_share": 0.5801526717557252
+    },
+    {
+      "signal": "ret_6m_sector_pct",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.02572276350107679,
+      "sigma_ic": 0.1778659899025117,
+      "tstat": 1.6552376600822407,
+      "power_days_80": 374.8578764532119,
+      "ic_positive_share": 0.5572519083969466
+    },
+    {
+      "signal": "product_momentum_v2",
+      "horizon_days": 21,
+      "n_dates": 131,
+      "n_ic_obs": 131,
+      "mean_ic": 0.03295653239006617,
+      "sigma_ic": 0.15408869652912424,
+      "tstat": 2.447971607624282,
+      "power_days_80": 171.3857090271978,
+      "ic_positive_share": 0.6030534351145038
+    }
+  ],
+  "sigma_ic_for_power": {
+    "signal": "product_momentum_v2",
+    "mu_ic": 0.03295653239006617,
+    "sigma_ic": 0.15408869652912424,
+    "T_80pct_power_days": 171.3857090271978,
+    "formula": "T \u2248 (2.80 \u00b7 \u03c3_IC / \u03bc_IC)\u00b2"
+  },
+  "paths": {
+    "panel": "artifacts/research/track_m/momentum_panel.csv",
+    "ic_timeseries": "artifacts/research/track_m/momentum_ic_timeseries.csv"
+  },
+  "social_track": "locked \u2014 no Social analysis until live density feasibility exists"
+}
