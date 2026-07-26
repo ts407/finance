@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,32 @@ DEFAULT_SCORING_PATH = ROOT / "config" / "scoring.yaml"
 DEFAULT_RULES_PATH = ROOT / "config" / "rules.json"
 
 log = get_logger("config")
+
+
+def set_dotted(raw: dict[str, Any], dotted: str, value: Any) -> None:
+    """
+    Set ``raw[a][b][c] = value`` from a dotted path ``"a.b.c"`` in place.
+
+    Nested dicts along the path are copy-on-write (replaced with shallow copies)
+    so shared sub-dicts from the source config are never mutated.
+    """
+    node: Any = raw
+    parts = dotted.split(".")
+    for part in parts[:-1]:
+        child = node[part]
+        if not isinstance(child, dict):
+            raise TypeError(f"Cannot override non-dict path segment '{part}' in {dotted}")
+        node[part] = dict(child)
+        node = node[part]
+    node[parts[-1]] = value
+
+
+def apply_overrides(raw: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Return a deep copy of ``raw`` with every dotted-path override applied."""
+    out = copy.deepcopy(raw)
+    for dotted, value in overrides.items():
+        set_dotted(out, dotted, value)
+    return out
 
 
 @dataclass(frozen=True)
