@@ -50,3 +50,7 @@ class ProviderMeta(ABC):
 
     @abstractmethod
     def metadata(self) -> dict[str, Any]: ...
+
+    def supports_historical(self) -> bool:
+        """True if arbitrary as_of is meaningful (fixtures yes; live Finnhub no)."""
+        return self.is_fixture()
