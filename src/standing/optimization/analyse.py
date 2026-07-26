@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -10,7 +9,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
-from standing.config import ScoringConfig, load_scoring_config
+from standing.config import ScoringConfig, apply_overrides, load_scoring_config
 from standing.optimization.paths import BASELINE_DIR, ensure_layout
 from standing.pipeline.snapshot import StandingSnapshot, persist_snapshot, run_snapshot
 from standing.providers import FixtureMarketProvider, FixtureSocialProvider
@@ -59,18 +58,7 @@ def _ranking_turnover(baseline: pd.DataFrame, other: pd.DataFrame) -> float:
 
 
 def _with_overrides(cfg: ScoringConfig, overrides: dict[str, Any]) -> ScoringConfig:
-    raw = copy.deepcopy(cfg.raw)
-    for dotted, value in overrides.items():
-        node: Any = raw
-        parts = dotted.split(".")
-        for part in parts[:-1]:
-            child = node[part]
-            if not isinstance(child, dict):
-                raise TypeError(f"Cannot override non-dict path segment '{part}' in {dotted}")
-            node[part] = dict(child)
-            node = node[part]
-        node[parts[-1]] = value
-    return ScoringConfig(raw=raw, path=cfg.path)
+    return ScoringConfig(raw=apply_overrides(cfg.raw, overrides), path=cfg.path)
 
 
 def run_baseline_snapshot(
@@ -164,10 +152,13 @@ def write_baseline_report(
     out_dir: Path | None = None,
     cycle_id: str | None = None,
     fine_sensitivity: bool = False,
+    track: str = "M",
 ) -> dict[str, Any]:
     """
     Run baseline + sensitivity diagnostics and persist under artifacts/optimization.
     Does not modify productive config/scoring.yaml.
+
+    ``track`` selects the sensitivity grid: "M" (market levers) or "S" (Social levers).
     """
     from standing.optimization.cycle import default_perturbations, next_cycle_id
 
@@ -183,7 +174,7 @@ def write_baseline_report(
         snap,
         cfg=cfg,
         history_days=history_days,
-        perturbations=default_perturbations(fine=fine_sensitivity, track="M"),
+        perturbations=default_perturbations(fine=fine_sensitivity, track=track),
     )
     cid = cycle_id or next_cycle_id(as_of)
 

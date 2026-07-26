@@ -4,6 +4,41 @@ import numpy as np
 import pandas as pd
 
 
+def sentiment_polarity(neg_share: float | np.ndarray) -> np.ndarray:
+    """
+    Map negative-mention share → signed polarity in [-1, 1].
+
+    neg_share 0.0 → +1 (bullish), 0.5 → 0 (neutral), 1.0 → -1 (bearish).
+    """
+    neg = np.asarray(neg_share, dtype=float)
+    return np.clip(1.0 - 2.0 * neg, -1.0, 1.0)
+
+
+def blend_sentiment(
+    volume_score: float | np.ndarray,
+    neg_share: float | np.ndarray,
+    *,
+    weight: float = 1.0,
+) -> np.ndarray:
+    """
+    Combine a 0–100 volume-attention score with sentiment into a signed social score.
+
+    Volume is *amplitude* (how loud), sentiment is *sign* (which way). A loud name
+    (volume 90 ≈ +40 above neutral 50) reads +40·polarity: bullish sentiment keeps it
+    high, bearish sentiment flips it symmetrically low, neutral sentiment collapses it
+    toward 50. Quiet names (volume ≈ 50) barely move regardless of sentiment.
+
+    ``weight`` in [0, 1] interpolates between pure volume (0) and full sentiment sign (1).
+    Result stays in [0, 100] so downstream shrinkage/tilt are unchanged.
+    """
+    vol = np.asarray(volume_score, dtype=float)
+    pol = sentiment_polarity(neg_share)
+    w = float(np.clip(weight, 0.0, 1.0))
+    amplitude = vol - 50.0
+    signed = amplitude * ((1.0 - w) + w * pol)
+    return np.clip(50.0 + signed, 0.0, 100.0)
+
+
 def apply_source_cap(
     daily: pd.DataFrame,
     *,
