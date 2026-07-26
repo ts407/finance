@@ -112,7 +112,7 @@ def test_run_vergleich_end_to_end(tmp_path: Path, monkeypatch):
     hyp_path, _ = write_hypothesis(
         hypothesis_id="H-CMP-01",
         basis="unit",
-        overrides={"social_tilt.tilt_max": 8},
+        overrides={"social_tilt.tilt_max": 3},
         prediction={"metric": "spearman_final_vs_composite", "expected_direction": "increase"},
         cycle_id="C-TEST",
     )
@@ -127,6 +127,6 @@ def test_run_vergleich_end_to_end(tmp_path: Path, monkeypatch):
     assert out["promote_to_productive"] is False
     assert "forward_spearman_lift_bootstrap" in out["metrics"]
     assert Path(tmp_path / "opt" / "decisions" / "H-CMP-01_decision.json").exists()
-    assert load_scoring_config().social_tilt["tilt_max"] == 10
+    assert load_scoring_config().social_tilt["tilt_max"] == 5
     updated = yaml.safe_load(hyp_path.read_text())
     assert updated["status"].startswith("decision_")

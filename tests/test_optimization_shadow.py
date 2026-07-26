@@ -34,7 +34,7 @@ def test_run_shadow_test(tmp_path: Path, monkeypatch):
     hyp_path, _cfg = write_hypothesis(
         hypothesis_id="H-SHADOW-01",
         basis="unit test",
-        overrides={"social_tilt.tilt_max": 8},
+        overrides={"social_tilt.tilt_max": 3},
         prediction={"metric": "mean_abs_tilt", "expected_direction": "decrease"},
         cycle_id="C-TEST",
     )
@@ -60,7 +60,7 @@ def test_run_shadow_test(tmp_path: Path, monkeypatch):
     assert updated["status"] == "shadow_complete"
     assert updated["handoff"] == "loop-vergleich-entscheidung"
     # productive untouched
-    assert load_scoring_config().social_tilt["tilt_max"] == 10
+    assert load_scoring_config().social_tilt["tilt_max"] == 5
 
 
 def test_deferred_rejected(tmp_path: Path, monkeypatch):
