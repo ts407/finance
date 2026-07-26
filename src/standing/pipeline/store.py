@@ -120,7 +120,8 @@ def load_immutable(as_of: date, *, root: Path | None = None) -> LoadedSnapshot:
     if not csv_path.exists() or not meta_path.exists():
         raise SnapshotMissingError(f"No immutable snapshot for {as_of.isoformat()} under {root}")
     payload = json.loads(meta_path.read_text())
-    standings = pd.read_csv(csv_path)
+    # Do not treat the literal "nan" in string columns as missing (value_ev_rung).
+    standings = pd.read_csv(csv_path, keep_default_na=False, na_values=[""])
     return LoadedSnapshot(
         as_of=date.fromisoformat(str(payload["as_of"])),
         universe_id=str(payload["universe_id"]),

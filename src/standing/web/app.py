@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import os
 import time
 from datetime import date, datetime
@@ -100,18 +101,18 @@ class StandingMeta(BaseModel):
 class StandingRow(BaseModel):
     ticker: str
     sector: str
-    value: float
-    quality: float
-    momentum: float
-    momentum_global: float
-    composite_standing: float
+    value: float | None = None
+    quality: float | None = None
+    momentum: float | None = None
+    momentum_global: float | None = None
+    composite_standing: float | None = None
     s_obs: float
     s_used: float
     n: float
     confidence_c: float
     neg_share: float
     attention_tilt: float
-    final_standing: float
+    final_standing: float | None = None
     sector_low_confidence: bool
     social_badge: str
     size_bucket: str | None = None
@@ -271,9 +272,30 @@ def _resolve_mode(value: str | None, allowed: tuple[str, ...], default: str) -> 
     return key
 
 
+_OPTIONAL_STRING_FIELDS = frozenset({"value_ev_rung", "value_metric_set", "size_bucket"})
+
+
+def _json_safe(value: Any, *, key: str | None = None) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered == "nan" or (key in _OPTIONAL_STRING_FIELDS and lowered == ""):
+            return None
+    return value
+
+
+def _json_safe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{key: _json_safe(val, key=key) for key, val in row.items()} for row in records]
+
+
 def _serialize(snap: StandingSnapshot) -> dict[str, Any]:
-    records = snap.standings.to_dict(orient="records")
-    heat = snap.standings.sort_values("s_used", ascending=False).to_dict(orient="records")
+    records = _json_safe_records(snap.standings.to_dict(orient="records"))
+    heat = _json_safe_records(
+        snap.standings.sort_values("s_used", ascending=False).to_dict(orient="records")
+    )
     return {
         "meta": {
             "as_of": snap.as_of.isoformat(),
@@ -339,8 +361,20 @@ def _apply_filters(
         "momentum": "momentum",
     }
     key = key_map[effective_sort]
-    standings = sorted(filtered, key=lambda r: float(r[key]), reverse=True)
-    heat = sorted(filtered, key=lambda r: float(r["s_used"]), reverse=True)
+
+    def _sort_key(row: dict[str, Any], field: str) -> float:
+        # Missing pillars (None after JSON-safe serialization) sort last.
+        raw = row.get(field)
+        if raw is None:
+            return float("-inf")
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            return float("-inf")
+        return float("-inf") if math.isnan(val) else val
+
+    standings = sorted(filtered, key=lambda r: _sort_key(r, key), reverse=True)
+    heat = sorted(filtered, key=lambda r: _sort_key(r, "s_used"), reverse=True)
     return standings, heat, key
 
 

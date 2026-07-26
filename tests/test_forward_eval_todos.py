@@ -108,5 +108,39 @@ def test_immutable_snapshot_store(tmp_path: Path):
     loaded = load_immutable(date(2026, 7, 22), root=tmp_path)
     assert loaded.universe_id == snap.universe_id
     assert "value_coverage" in loaded.standings.columns
+    assert loaded.standings["value_ev_rung"].map(lambda v: v is None or isinstance(v, str)).all()
     assert loaded.meta["meta"]["social_is_fixture"] is True
     assert loaded.meta["meta"]["universe_as_of"]
+
+
+def test_store_snapshot_validates_api_response(tmp_path: Path):
+    from standing.web.app import SnapshotResponse, _serialize
+
+    cfg = load_scoring_config()
+    snap = run_snapshot(
+        as_of=date(2026, 7, 22),
+        market=FixtureMarketProvider(),
+        social=FixtureSocialProvider(history_days=14),
+        cfg=cfg,
+        market_mode="fixture",
+        social_mode="fixture",
+    )
+    persist_immutable(snap, root=tmp_path)
+    loaded = load_immutable(date(2026, 7, 22), root=tmp_path).to_standing_snapshot()
+    payload = _serialize(loaded)
+    meta = {
+        "as_of": loaded.as_of.isoformat(),
+        "universe_id": loaded.universe_id,
+        "methodology_version": loaded.methodology_version,
+        "score_kind": loaded.score_kind,
+        "placeholder": loaded.placeholder,
+        "n_names": int(loaded.meta.get("n_names", len(payload["standings"]))),
+        "low_confidence_sectors": list(loaded.meta.get("low_confidence_sectors") or []),
+        "sector_counts": dict(loaded.meta.get("sector_counts") or {}),
+        "market_provider": loaded.meta.get("market_provider", "unknown"),
+        "social_provider": loaded.meta.get("social_provider", "unknown"),
+    }
+    validated = SnapshotResponse.model_validate(
+        {"meta": meta, "standings": payload["standings"], "heat": payload["heat"]}
+    )
+    assert validated.standings
