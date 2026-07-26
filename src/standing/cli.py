@@ -304,11 +304,13 @@ def cmd_loop_analyse(args: argparse.Namespace) -> int:
             f"hypothesis={prior.get('hypothesis_id', '-')}"
         )
 
+    track = str(getattr(args, "track", "M")).upper()
     report = write_baseline_report(
         as_of=as_of,
         history_days=args.history_days,
         cycle_id=cycle_id,
         fine_sensitivity=fine,
+        track=track,
     )
     baseline = report["baseline"]
     console.print(
@@ -335,6 +337,7 @@ def cmd_loop_analyse(args: argparse.Namespace) -> int:
         as_of=as_of,
         baseline=baseline,
         sensitivity=report["sensitivity"],
+        track=track,
     )
 
     written: list[dict[str, str]] = []
@@ -558,6 +561,59 @@ def cmd_track_m_calibrate(args: argparse.Namespace) -> int:
     return 0 if status != "failed_empty_panel" else 1
 
 
+def cmd_track_s_calibrate(args: argparse.Namespace) -> int:
+    """Track S: calibrate the sentiment axis via forward-return IC; gate the flag."""
+    import yaml
+
+    from standing.config import DEFAULT_SCORING_PATH, apply_overrides, load_scoring_config
+    from standing.optimization.log import append_log
+    from standing.research.sentiment_calibrate import run_sentiment_calibration
+
+    console.print("[bold]track-s-calibrate[/bold] — sentiment-axis forward-return IC / apparatus gate")
+    report = run_sentiment_calibration()
+    st = report["apparatus_self_test"]
+    rc = report["real_calibration"]
+    console.print(
+        f"apparatus_self_test: passed={st['passed']} (mean_ic={st['mean_ic']:.4f} t={st['tstat']:.2f} n={st['n_ic_obs']})"
+    )
+    console.print(
+        f"real_calibration: passed={rc['passed']} status={report['status']} "
+        f"(mean_ic={rc['mean_ic']:.4f} t={rc['tstat']:.2f} n={rc['n_ic_obs']})"
+    )
+    console.print(
+        f"sentiment_calibrated: current={report['sentiment_calibrated_current']} "
+        f"recommend={report['recommend_sentiment_calibrated']}"
+    )
+    console.print(f"report: {report.get('report_path')}")
+
+    flipped = False
+    if args.commit_flag and report["recommend_sentiment_calibrated"]:
+        cfg = load_scoring_config()
+        raw = apply_overrides(cfg.raw, {"social_pipeline.sentiment_calibrated": True})
+        with DEFAULT_SCORING_PATH.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(raw, f, sort_keys=False, allow_unicode=True)
+        flipped = True
+        console.print("[green]Flipped sentiment_calibrated → true[/green] (apparatus gate passed).")
+    elif args.commit_flag:
+        console.print("[yellow]--commit-flag set but gate not passed; sentiment_calibrated unchanged.[/yellow]")
+
+    append_log(
+        {
+            "phase": "track-s-calibrate",
+            "track": "S",
+            "decision": report["status"],
+            "apparatus_self_test_passed": st["passed"],
+            "real_calibration_passed": rc["passed"],
+            "recommend_sentiment_calibrated": report["recommend_sentiment_calibrated"],
+            "sentiment_calibrated_flipped": flipped,
+            "report_path": report.get("report_path"),
+            "handoff": "loop-analyse-hypothese",
+            "productive_config_unchanged": not flipped,
+        }
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="standing",
@@ -644,6 +700,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force fine-grained sensitivity grid (also auto-enabled after rejects)",
     )
+    la.add_argument(
+        "--track",
+        choices=["M", "S", "m", "s"],
+        default="M",
+        help="Optimization track: M=market levers (default), S=Social/sentiment levers",
+    )
     la.set_defaults(func=cmd_loop_analyse)
 
     ls = sub.add_parser(
@@ -688,6 +750,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use only cached/cassette OHLCV (no network fetch)",
     )
     tm.set_defaults(func=cmd_track_m_calibrate)
+
+    ts = sub.add_parser(
+        "track-s-calibrate",
+        help="Track S: calibrate the sentiment axis (forward-return IC) and gate the flag",
+    )
+    ts.add_argument(
+        "--commit-flag",
+        action="store_true",
+        help="Flip social_pipeline.sentiment_calibrated → true IF the apparatus gate passes",
+    )
+    ts.set_defaults(func=cmd_track_s_calibrate)
 
     return p
 

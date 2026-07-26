@@ -13,7 +13,7 @@ from standing.providers.base import MarketProvider, ProviderMeta
 from standing.providers.finnhub.client import FinnhubClient, FinnhubError
 from standing.providers.finnhub.mapping import completeness, map_finnhub_row, rows_to_frame
 from standing.providers.stooq.ohlcv import StooqOHLCV
-from standing.universe.seeds import listing_lookup, load_seed_tickers
+from standing.universe.seeds import listing_lookup, load_seed_tickers, load_sector_map
 
 
 class FinnhubMarketProvider(MarketProvider, ProviderMeta):
@@ -31,12 +31,14 @@ class FinnhubMarketProvider(MarketProvider, ProviderMeta):
         ohlcv: StooqOHLCV | None = None,
         tickers: list[str] | None = None,
         seed_listings: dict[str, str] | None = None,
+        sector_fallback: dict[str, str] | None = None,
         allow_historical_as_of: bool = False,
     ):
         self._client = client or FinnhubClient()
         self._ohlcv = ohlcv
         self._tickers = tickers
         self._seed_listings = seed_listings or {}
+        self._sector_fallback = sector_fallback or {}
         self._allow_historical_as_of = allow_historical_as_of
         self._last_completeness: dict[str, Any] = {}
 
@@ -47,6 +49,7 @@ class FinnhubMarketProvider(MarketProvider, ProviderMeta):
         cassette_dir: Path | str | None = None,
         allow_network: bool | None = None,
         use_stooq: bool = True,
+        full_universe: bool = False,
     ) -> FinnhubMarketProvider:
         cdir = Path(cassette_dir) if cassette_dir else None
         if cdir is None and os.environ.get("STANDING_FINNHUB_CASSETTES"):
@@ -69,15 +72,21 @@ class FinnhubMarketProvider(MarketProvider, ProviderMeta):
                 stooq_dir = sibling if sibling.exists() else None
             ohlcv = StooqOHLCV(cassette_dir=stooq_dir, allow_network=net)
         seeds = listing_lookup()
-        # Desk default: compact fixture universe (seed lists are 100s of names — too slow for free tier)
-        from standing.providers.market_fixture import FIXTURE_TICKERS
+        # Desk default: compact fixture universe (seed lists are 100s of names — too slow
+        # for free tier). full_universe opts into the whole seed list (~170 names).
+        if full_universe:
+            desk_tickers = load_seed_tickers()
+        else:
+            from standing.providers.market_fixture import FIXTURE_TICKERS
 
-        desk_tickers = [t for t, _, _ in FIXTURE_TICKERS]
+            desk_tickers = [t for t, _, _ in FIXTURE_TICKERS]
         return cls(
             client=client,
             ohlcv=ohlcv,
             tickers=desk_tickers,
             seed_listings=seeds,
+            # Sector reference fills in when Finnhub's finnhubIndustry is unmapped.
+            sector_fallback=load_sector_map(),
             # Fundamentals are "as of now"; OHLCV still respects as_of. Allow desk date picks.
             allow_historical_as_of=True,
         )
@@ -131,8 +140,11 @@ class FinnhubMarketProvider(MarketProvider, ProviderMeta):
                 ohlcv=ohlcv_feats,
             )
             if row.get("sector") is None:
-                errors.append(f"{ticker}: unmapped sector")
-                continue
+                fallback = self._sector_fallback.get(ticker.upper())
+                if fallback is None:
+                    errors.append(f"{ticker}: unmapped sector")
+                    continue
+                row["sector"] = fallback
             rows.append(row)
         df = rows_to_frame(rows)
         self._last_completeness = completeness(df)

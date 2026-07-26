@@ -61,18 +61,46 @@ def test_formulate_track_m_skips_social(tmp_path: Path, monkeypatch):
         sensitivity=sensitivity,
         track="M",
     )
+    # Track M stays market-only and no longer force-defers Social.
     assert all(not is_social_override(h["overrides"]) for h in ready)
     assert ready[0]["overrides"] != {"social_tilt.tilt_max": 9}
-    assert deferred[0]["hypothesis_id"] == "H-SOCIAL-LOCKED"
+    assert deferred == []
 
 
-def test_formulate_track_s_locked():
+def test_formulate_track_s_unlocked_formulates_social(tmp_path: Path, monkeypatch):
+    """Track S is unlocked: it formulates Social levers and defers nothing."""
+    monkeypatch.setattr("standing.optimization.paths.HYPOTHESES_DIR", tmp_path / "hyp")
+    (tmp_path / "hyp").mkdir()
+    log = tmp_path / "loop_log.jsonl"
+    log.write_text("")
+    monkeypatch.setattr("standing.optimization.log.LOOP_LOG_PATH", log)
+
+    sensitivity = [
+        {
+            "label": "sentiment_weight_up",
+            "change": {"social_tilt.sentiment_weight": 0.75},
+            "ranking_turnover_vs_baseline": 0.08,
+            "spearman_final_vs_base": 0.905,
+            "mean_abs_tilt": 3.1,
+            "tilt_vs_baseline_mae": 0.4,
+        },
+        {
+            "label": "winsorize_tighter",  # market lever — must be skipped on Track S
+            "change": {"base.winsorize.lower": 0.02, "base.winsorize.upper": 0.98},
+            "ranking_turnover_vs_baseline": 0.02,
+            "spearman_final_vs_base": 0.90,
+            "mean_abs_tilt": 3.0,
+            "tilt_vs_baseline_mae": 0.0,
+        },
+    ]
     ready, deferred = formulate_hypotheses(
         cycle_id="C-TEST",
         as_of=date(2026, 7, 22),
-        baseline={"spearman_final_vs_composite": 0.9, "mean_abs_tilt": 5.0, "mean_n": 10},
-        sensitivity=[],
+        baseline={"spearman_final_vs_composite": 0.9, "mean_abs_tilt": 3.0, "mean_n": 10},
+        sensitivity=sensitivity,
         track="S",
     )
-    assert ready == []
-    assert deferred[0]["hypothesis_id"] == "H-SOCIAL-LOCKED"
+    assert ready, "Track S should now formulate Social hypotheses"
+    assert all(is_social_override(h["overrides"]) for h in ready)
+    assert all(h["prediction"]["track"] == "S" for h in ready)
+    assert deferred == []

@@ -11,9 +11,13 @@ base:
   value_ev_inapplicable_sectors: [Financials, Real Estate]
 
 social_tilt:
-  # Volume-only attention (Wikipedia/Bluesky) — keep well under old 40% pillar idea.
+  # Attention tilt (Wikipedia/Bluesky) — kept well under the old 40% pillar idea.
+  # volume_plus_sentiment: loudness is amplitude, sentiment (neg_share) is sign, so a
+  # heavily-negative loud name tilts DOWN symmetrically instead of merely being damped.
+  # sentiment_weight in [0,1] blends volume-only (0) ↔ full sentiment sign (1).
   # tilt_max=5 ≈ ±5 pts on Final; raise only after calibrated sentiment.
-  attention_mode: volume_only
+  attention_mode: volume_plus_sentiment
+  sentiment_weight: 0.5
   tilt_max: 5
   beta: 1.5                     # placeholder
   shape: "tanh"

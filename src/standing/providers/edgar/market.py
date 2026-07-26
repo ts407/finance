@@ -12,10 +12,19 @@ from standing.providers.cache import DiskCache
 from standing.providers.edgar.client import EdgarClient
 from standing.providers.edgar.fundamentals import extract_fundamentals
 from standing.providers.market_fixture import FIXTURE_TICKERS
+from standing.universe.seeds import load_seed_tickers, load_universe_meta
 
 
-def _fixture_meta() -> dict[str, tuple[str, str]]:
-    return {t: (sector, listing) for t, sector, listing in FIXTURE_TICKERS}
+def _universe_meta() -> dict[str, tuple[str, str]]:
+    """Ticker → (GICS-11 sector, listing) for the full seed universe.
+
+    Backed by ``config/universe/sectors.csv``; the compact fixture desk is a subset.
+    """
+    meta = {t: (m["sector"], m["listing"]) for t, m in load_universe_meta().items()}
+    # Fixture-only names (should already be covered) keep a curated fallback.
+    for ticker, sector, listing in FIXTURE_TICKERS:
+        meta.setdefault(ticker, (sector, listing))
+    return meta
 
 
 class EdgarMarketProvider(MarketProvider, ProviderMeta):
@@ -25,12 +34,14 @@ class EdgarMarketProvider(MarketProvider, ProviderMeta):
         client: EdgarClient | None = None,
         tickers: list[str] | None = None,
         cache: DiskCache | None = None,
+        full_universe: bool = False,
     ):
         self._cache = cache if cache is not None else DiskCache(ttl_seconds=24 * 3600)
         self._client = client or EdgarClient(cache=self._cache)
-        meta = _fixture_meta()
+        meta = _universe_meta()
         if tickers is None:
-            tickers = list(meta.keys())
+            # Full seed universe (~170 names) or the compact fixture desk (~54).
+            tickers = load_seed_tickers() if full_universe else [t for t, _, _ in FIXTURE_TICKERS]
         self._tickers = [t.upper() for t in tickers]
         self._meta = meta
         self._last: dict[str, Any] = {}

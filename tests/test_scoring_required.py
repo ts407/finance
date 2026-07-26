@@ -66,8 +66,12 @@ def test_placeholder_true_on_fixture_config():
     assert cfg.social_pipeline["reddit_comments"] is False
     assert cfg.social_tilt["shape"] == "tanh"
     assert cfg.social_tilt["symmetric"] is True
+    # Tilt stays bounded (±5) regardless of attention mode — the real safety rail.
     assert math.isclose(cfg.social_tilt["tilt_max"], 5)
-    assert cfg.social_tilt.get("attention_mode") == "volume_only"
+    # Track S is unlocked: sentiment axis is a supported, bounded attention mode.
+    assert cfg.social_tilt.get("attention_mode") in ("volume_only", "volume_plus_sentiment")
+    if cfg.social_tilt.get("attention_mode") == "volume_plus_sentiment":
+        assert 0.0 <= float(cfg.social_tilt.get("sentiment_weight", 1.0)) <= 1.0
 
 
 def test_tilt_tanh_saturates():

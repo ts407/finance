@@ -42,9 +42,15 @@ standing table --as-of 2026-07-22 --market fixture --social fixture
 
 # Live desk
 standing table --as-of 2026-07-22 --market live --social open
+STANDING_UNIVERSE=seed standing table --market live --social open   # full S&P 500 ∪ NDX ∪ ADR
 standing ingest --market live --social open   # immutable day log (forward eval)
 standing metrics-report --market live       # missing/non-positive metric check
 standing serve --host 127.0.0.1 --port 8000
+
+# Optimization / calibration
+standing loop-analyse --track S             # unlocked Track S: formulate Social hypotheses
+standing track-m-calibrate                  # momentum IC apparatus (multi-year OHLCV)
+standing track-s-calibrate                  # sentiment-axis forward-return IC + flag gate
 ```
 
 Open **http://127.0.0.1:8000/**
@@ -81,7 +87,9 @@ Desk controls: presets (balanced / value_led / quality_led / momentum_led / atte
 
 1. **Admit** names by market-cap, ADV, and listing scope (`US` / `ADR`).
 2. **Base** = sector-relative percentiles of Value, Quality, Momentum (equal weight).
-3. **Social** = capped source shares → shrinkage → `tanh` tilt (volume-only until calibrated sentiment).
+3. **Social** = capped source shares → shrinkage → `tanh` tilt. Attention modes: `volume_only`
+   (loudness only) or `volume_plus_sentiment` (loudness is amplitude, `neg_share` is sign — a
+   loud, heavily-negative name tilts *down* symmetrically, not merely damped).
 4. **Final** = clip(Base + Tilt, 0, 100). No second renorm/floor path.
 
 Full formulas: **[docs/concept-code-mechanisms.md](docs/concept-code-mechanisms.md)** · methodology source: **[docs/aktienradar-konzept-v2.md](docs/aktienradar-konzept-v2.md)** · data paths: **[docs/datenbeschaffung.md](docs/datenbeschaffung.md)**
@@ -95,7 +103,9 @@ Full formulas: **[docs/concept-code-mechanisms.md](docs/concept-code-mechanisms.
 | [`config/scoring.yaml`](config/scoring.yaml) | Methodology: pillar weights, tilt, shrinkage, `placeholder` |
 | [`config/rules.json`](config/rules.json) | Universe admission: caps, ADV, scope, `universe_id` |
 
-Current locks: `score_kind: editorial_descriptive` · `methodology_version: "2.1.0"` · `placeholder: true` · `tilt_max: 5` (volume-only attention).
+Current locks: `score_kind: editorial_descriptive` · `methodology_version: "2.1.0"` · `placeholder: true` · `tilt_max: 5` (bounded attention; `attention_mode: volume_plus_sentiment`, `sentiment_weight: 0.5`).
+
+Universe: the live desk defaults to the compact fixture set; set `STANDING_UNIVERSE=seed` (or pass `full_universe`) to score the full seed universe (S&P 500 ∪ NDX100 ∪ liquid ADRs, ~535 names) with GICS-11 sectors from [`config/universe/sectors.csv`](config/universe/sectors.csv). Sector reference is sourced from the S&P 500 constituents list (GICS Sector); 9 of 11 sectors clear the ≥30-name confidence floor.
 
 ---
 
@@ -116,8 +126,9 @@ src/standing/optimization    # shadow / vergleich optimization loop
 
 ## Current limits
 
-- Fixture universe is a compact multi-sector demo (~50 names). Target 400–500 with ≥30/sector; thin sectors flagged `sector_low_confidence`.
+- Fixture universe is a compact multi-sector demo (~50 names). The seed universe (`STANDING_UNIVERSE=seed`) covers the full S&P 500 ∪ NDX100 ∪ liquid ADRs (~535 names) with real GICS-11 sectors; thin sectors flagged `sector_low_confidence`.
 - Parameters are synthetic (`placeholder: true`) until an empirical freeze.
+- Track S is unlocked: the sentiment axis and Social levers flow through the optimization loop (`standing loop-analyse --track S`), but sentiment is not yet calibrated (`sentiment_calibrated: false`) and promotion stays blocked while `placeholder: true`.
 - Reddit/StockTwits remain fixture-only; Wikipedia + Bluesky are the open attention path.
 - Not investment advice.
 

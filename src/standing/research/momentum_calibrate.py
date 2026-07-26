@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from standing.config import ROOT
-from standing.domain.scoring.base import _sector_relative_percentile
+from standing.domain.scoring.base import _peer_relative_percentile
 from standing.market.ohlcv_store import OHLCVStore
 from standing.providers.market_fixture import FIXTURE_TICKERS
 from standing.providers.stooq.ohlcv import compute_ohlcv_features
@@ -49,7 +49,9 @@ def _score_raw_ret(frame: pd.DataFrame, col: str) -> pd.Series:
 def _score_sector_percentile(frame: pd.DataFrame, col: str) -> pd.Series:
     tmp = frame[["sector"]].copy()
     tmp["_x"] = frame[col]
-    return _sector_relative_percentile(tmp, "_x", higher_is_better=True, winsorize=(0.01, 0.99))
+    return _peer_relative_percentile(
+        tmp, "_x", peer_col="sector", higher_is_better=True, winsorize=(0.01, 0.99)
+    )
 
 
 def _score_product_momentum(frame: pd.DataFrame) -> pd.Series:

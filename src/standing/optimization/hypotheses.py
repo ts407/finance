@@ -1,27 +1,13 @@
 from __future__ import annotations
 
-import copy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from standing.config import load_scoring_config
+from standing.config import apply_overrides, load_scoring_config
 from standing.optimization.paths import CONFIGS_DIR, HYPOTHESES_DIR, ensure_layout
-
-
-def _set_dotted(raw: dict[str, Any], dotted: str, value: Any) -> None:
-    node: Any = raw
-    parts = dotted.split(".")
-    for part in parts[:-1]:
-        child = node[part]
-        if not isinstance(child, dict):
-            raise TypeError(f"Cannot override non-dict path segment '{part}' in {dotted}")
-        # copy-on-write for nested dicts so we don't mutate shared refs oddly
-        node[part] = dict(child)
-        node = node[part]
-    node[parts[-1]] = value
 
 
 def write_shadow_config(
@@ -33,9 +19,7 @@ def write_shadow_config(
     """Write an isolated scoring config copy; never touches productive scoring.yaml."""
     ensure_layout()
     cfg = load_scoring_config()
-    raw = copy.deepcopy(cfg.raw)
-    for dotted, value in overrides.items():
-        _set_dotted(raw, dotted, value)
+    raw = apply_overrides(cfg.raw, overrides)
     stamp = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = CONFIGS_DIR / f"{hypothesis_id}_{stamp}.yaml"
     with out.open("w", encoding="utf-8") as f:

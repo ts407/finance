@@ -47,6 +47,18 @@ TRACK_M_PERTURBATIONS = [
     ("min_adv_1e7", {"universe.min_adv_usd_20d": 1.0e7}),
 ]
 
+# Track S (Social) — unlocked: sentiment-axis + bounded-tilt levers. Every candidate
+# still faces the same forward-evidence CI gate and turnover cap in vergleich, and
+# tilt stays bounded by tilt_max, so "unlocked" means testable, not unconstrained.
+TRACK_S_PERTURBATIONS = [
+    ("sentiment_weight_up", {"social_tilt.sentiment_weight": 0.75}),
+    ("sentiment_weight_down", {"social_tilt.sentiment_weight": 0.25}),
+    ("sentiment_full", {"social_tilt.sentiment_weight": 1.0}),
+    ("beta_softer", {"social_tilt.beta": 1.0}),
+    ("beta_sharper", {"social_tilt.beta": 2.0}),
+    ("shrink_stronger", {"shrinkage.k": 15}),
+]
+
 
 def is_social_override(overrides: dict[str, Any]) -> bool:
     return any(
@@ -59,11 +71,11 @@ def default_perturbations(*, fine: bool = False, track: str = "M") -> list[tuple
     """
     Sensitivity grid for the active track.
 
-    Track S (Social) returns an empty grid — Social hypotheses are locked.
+    Track S (Social) — unlocked: sentiment-axis + bounded-tilt levers.
     Track M uses V/Q/M / universe / winsorize levers only.
     """
     if track.upper() == "S":
-        return []
+        return list(TRACK_S_PERTURBATIONS)
     return list(TRACK_M_PERTURBATIONS)
 
 
@@ -79,28 +91,26 @@ def formulate_hypotheses(
     """
     Build shadow-ready + deferred hypothesis specs from baseline + sensitivity.
 
-    Track M only: Social overrides are rejected. Prefer market levers under the
-    offline turnover safety margin.
+    Track M keeps market levers (V/Q/M / universe / winsorize); Track S keeps Social
+    levers (sentiment axis / tilt shape / shrinkage). Each track drops the other's
+    overrides so a cycle stays single-variable. Both tracks face the same forward-
+    evidence CI gate and turnover cap downstream.
     """
     from standing.optimization.paths import HYPOTHESES_DIR
 
-    if track.upper() == "S":
-        return [], [
-            {
-                "hypothesis_id": "H-SOCIAL-LOCKED",
-                "reason": (
-                    "Track S locked: no Social score hypotheses until live density "
-                    "feasibility (n distribution / sparse_share) exists."
-                ),
-                "overrides": {},
-            }
-        ]
+    track_s = track.upper() == "S"
+    track_label = "S" if track_s else "M"
+
+    def _off_track(change: dict[str, Any]) -> bool:
+        """True when a change belongs to the *other* track and should be skipped."""
+        social = is_social_override(change)
+        return (not social) if track_s else social
 
     rows: list[dict[str, Any]] = []
     for item in sensitivity:
         if isinstance(item, SensitivityResult):
             change = item.change
-            if is_social_override(change):
+            if _off_track(change):
                 continue
             rows.append(
                 {
@@ -113,7 +123,7 @@ def formulate_hypotheses(
                 }
             )
         else:
-            if is_social_override(item.get("change") or {}):
+            if _off_track(item.get("change") or {}):
                 continue
             rows.append(item)
 
@@ -173,18 +183,19 @@ def formulate_hypotheses(
     ready: list[dict[str, Any]] = []
     used_labels: set[str] = set()
 
-    # Track M: take up to two lowest-turnover untested market levers
+    lever_kind = "Social" if track_s else "market"
+    # Take up to two lowest-turnover untested levers for the active track.
     for r in gated:
         if r["label"] in used_labels:
             continue
-        if is_social_override(r["change"]):
+        if _off_track(r["change"]):
             continue
         hid, seq = alloc_id(seq)
         ready.append(
             {
                 "hypothesis_id": hid,
                 "basis": (
-                    f"Track M cycle {cycle_id}: Social locked. Offline {r['label']} "
+                    f"Track {track_label} cycle {cycle_id}: offline {r['label']} "
                     f"turnover={r['ranking_turnover_vs_baseline']:.1%} under safety gate "
                     f"{offline_gate:.0%}. Evaluate with forward-return apparatus "
                     f"(see standing track-m-calibrate / σ_IC)."
@@ -195,8 +206,8 @@ def formulate_hypotheses(
                     "expected_direction": "non_negative_with_ci",
                     "secondary_metric": "ranking_turnover_vs_baseline",
                     "expected_secondary": f"below_{max_turnover_gate:.0%}_gate",
-                    "rationale": f"{r['label']} — Track M market lever (no Social).",
-                    "track": "M",
+                    "rationale": f"{r['label']} — Track {track_label} {lever_kind} lever.",
+                    "track": track_label,
                 },
             }
         )
@@ -205,11 +216,11 @@ def formulate_hypotheses(
             break
 
     if not ready:
-        # Fallback: any untested non-social row, lowest turnover
+        # Fallback: any untested on-track row, lowest turnover
         candidates = [
             r
             for r in rows
-            if not is_social_override(r["change"])
+            if not _off_track(r["change"])
             and not any((p, repr(v)) in tested_overrides for p, v in r["change"].items())
         ]
         candidates.sort(key=lambda r: r["ranking_turnover_vs_baseline"])
@@ -219,7 +230,7 @@ def formulate_hypotheses(
                 {
                     "hypothesis_id": hid,
                     "basis": (
-                        f"Track M cycle {cycle_id}: fallback {r['label']} "
+                        f"Track {track_label} cycle {cycle_id}: fallback {r['label']} "
                         f"(turnover={r['ranking_turnover_vs_baseline']:.1%})."
                     ),
                     "overrides": dict(r["change"]),
@@ -229,21 +240,13 @@ def formulate_hypotheses(
                         "secondary_metric": "ranking_turnover_vs_baseline",
                         "expected_secondary": "observe",
                         "rationale": r["label"],
-                        "track": "M",
+                        "track": track_label,
                     },
                 }
             )
 
-    deferred = [
-        {
-            "hypothesis_id": "H-SOCIAL-LOCKED",
-            "reason": (
-                "Track S locked: no Social score hypotheses until live Social density "
-                "feasibility exists (no backfill). Prior k/tilt/beta Social shadows stay archived."
-            ),
-            "overrides": {},
-        }
-    ]
+    # Track S is no longer force-deferred; nothing deferred by default.
+    deferred: list[dict[str, Any]] = []
     return ready, deferred
 
 
