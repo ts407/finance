@@ -2,7 +2,10 @@
 
 **Status:** Concept v2 (revised)  
 **Source of truth:** [aktienradar-konzept-v2.md](./aktienradar-konzept-v2.md)  
+<<<<<<< HEAD
 **Data acquisition:** [datenbeschaffung.md](./datenbeschaffung.md)  
+=======
+>>>>>>> origin/cursor/concept-file-rules-5f88
 **Code mechanisms:** [concept-code-mechanisms.md](./concept-code-mechanisms.md)  
 **Methodology:** Descriptive–explanatory V/Q/M base + bounded Social tilt  
 **Verification snapshot:** July 2026 (API / market-data landscape)
