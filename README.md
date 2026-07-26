@@ -44,8 +44,16 @@ standing serve --host 127.0.0.1 --port 8000
 | `/api/snapshot` | JSON standings (`preset`, `sector`, `q`, `sort`, `as_of`) |
 | `/api/snapshot.csv` | CSV export with the same filters |
 | `/api/ticker/{ticker}` | Single-name evidence payload |
+| `/api/client-logs` | Batched UI log ingest (`POST`) |
 
 Desk controls: presets (balanced / value_led / quality_led / momentum_led / attention_confirmed), sector filter, search (`/` focuses), CSV export.
+
+## Logging
+
+- Backend uses the stdlib `standing.*` logger hierarchy (`standing.web`, `standing.pipeline.snapshot`, `standing.cli`, …).
+- Level via `STANDING_LOG_LEVEL` or `standing --log-level debug <cmd>`.
+- Web desk ships request middleware plus `POST /api/client-logs` for batched UI events from `/static/logger.js`.
+- `standing serve --log-level info` still controls uvicorn; use the global `--log-level` / env for Standing’s own logger.
 
 ## Layout
 

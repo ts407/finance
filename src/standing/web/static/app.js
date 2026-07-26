@@ -1,3 +1,7 @@
+import { logger } from "./logger.js";
+
+logger.setPage("desk");
+
 const state = {
   view: "standing",
   data: null,
@@ -85,8 +89,15 @@ function setLoading(isLoading) {
 
 async function loadSnapshot() {
   setLoading(true);
+  const params = queryParams();
+  logger.info("snapshot load start", {
+    as_of: params.get("as_of"),
+    preset: params.get("preset"),
+    sort: params.get("sort"),
+    sector: params.get("sector") || null,
+    q: params.get("q") || null,
+  });
   try {
-    const params = queryParams();
     const res = await fetch(`/api/snapshot?${params.toString()}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -100,6 +111,12 @@ async function loadSnapshot() {
     const m = state.data.meta || {};
     const mode = `${m.market_mode || els.market.value} / ${m.social_mode || els.social.value}`;
     const serve = m.served_from ? ` · served ${m.served_from}` : "";
+    logger.info("snapshot load ok", {
+      n,
+      universe: m.universe_id,
+      as_of: m.as_of,
+      served_from: m.served_from,
+    });
     setStatus(
       n === 0
         ? "No rows match this preset / filter."
@@ -211,6 +228,7 @@ function renderTables() {
 
 function setView(view) {
   state.view = view;
+  logger.info("view change", { view });
   document.querySelectorAll(".tab").forEach((btn) => {
     const active = btn.dataset.view === view;
     btn.classList.toggle("active", active);
@@ -224,6 +242,7 @@ function openDrawer(ticker) {
   const row = state.data.standings.find((r) => r.ticker === ticker)
     || state.data.heat.find((r) => r.ticker === ticker);
   if (!row) return;
+  logger.info("drawer open", { ticker: row.ticker, sector: row.sector });
 
   const m = state.data.meta;
   els.drawerTicker.textContent = row.ticker;
@@ -305,6 +324,12 @@ function closeDrawer() {
 
 function exportCsv() {
   const params = queryParams();
+  logger.info("csv export", {
+    as_of: params.get("as_of"),
+    preset: params.get("preset"),
+    sector: params.get("sector") || null,
+    q: params.get("q") || null,
+  });
   window.location.href = `/api/snapshot.csv?${params.toString()}`;
 }
 
@@ -346,13 +371,14 @@ function bind() {
 }
 
 function showError(err) {
-  console.error(err);
   const msg = err && err.message ? err.message : String(err);
+  logger.error("snapshot load failed", { message: msg });
   setStatus(`Failed to load: ${msg}`, "error");
   const row = `<tr class="state-row error"><td colspan="9">Failed to load: ${msg}</td></tr>`;
   els.standingBody.innerHTML = row;
   els.heatBody.innerHTML = row;
 }
 
+logger.info("desk boot");
 bind();
 loadSnapshot();

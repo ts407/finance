@@ -8,7 +8,10 @@ import pandas as pd
 
 from standing.config import ScoringConfig, load_rules
 from standing.domain.scoring.peer_buckets import attach_size_buckets
+from standing.logging_config import get_logger
 from standing.providers.base import MarketProvider
+
+log = get_logger("universe")
 
 
 @dataclass(frozen=True)
@@ -63,5 +66,14 @@ def fetch_and_build(
     cfg: ScoringConfig,
     rules: dict[str, Any] | None = None,
 ) -> UniverseSnapshot:
+    provider_name = getattr(provider, "name", lambda: "unknown")()
+    log.debug("Fetching market universe provider=%s as_of=%s", provider_name, as_of.isoformat())
     market = provider.fetch(as_of)
-    return build_universe(market, as_of=as_of, cfg=cfg, rules=rules)
+    universe = build_universe(market, as_of=as_of, cfg=cfg, rules=rules)
+    log.info(
+        "Universe admitted n=%s sectors=%s low_confidence=%s",
+        len(universe.members),
+        len(universe.sector_counts),
+        len(universe.low_confidence_sectors),
+    )
+    return universe

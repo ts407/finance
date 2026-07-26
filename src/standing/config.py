@@ -7,9 +7,13 @@ from typing import Any
 
 import yaml
 
+from standing.logging_config import get_logger
+
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCORING_PATH = ROOT / "config" / "scoring.yaml"
 DEFAULT_RULES_PATH = ROOT / "config" / "rules.json"
+
+log = get_logger("config")
 
 
 @dataclass(frozen=True)
@@ -52,14 +56,29 @@ class ScoringConfig:
 
 def load_scoring_config(path: Path | None = None) -> ScoringConfig:
     cfg_path = path or DEFAULT_SCORING_PATH
+    log.debug("Loading scoring config from %s", cfg_path)
     with cfg_path.open() as f:
         raw = yaml.safe_load(f)
     if not isinstance(raw, dict):
+        log.error("Invalid scoring config at %s", cfg_path)
         raise ValueError(f"Invalid scoring config at {cfg_path}")
-    return ScoringConfig(raw=raw, path=cfg_path)
+    cfg = ScoringConfig(raw=raw, path=cfg_path)
+    log.info(
+        "Loaded scoring config methodology=%s score_kind=%s placeholder=%s",
+        cfg.methodology_version,
+        cfg.score_kind,
+        cfg.placeholder,
+    )
+    return cfg
 
 
 def load_rules(path: Path | None = None) -> dict[str, Any]:
     rules_path = path or DEFAULT_RULES_PATH
+    log.debug("Loading universe rules from %s", rules_path)
     with rules_path.open() as f:
-        return json.load(f)
+        rules = json.load(f)
+    log.info(
+        "Loaded universe rules universe_id=%s",
+        rules.get("universe_id", "unknown"),
+    )
+    return rules

@@ -46,6 +46,7 @@ def test_web_health_and_snapshot():
     assert b'id="social"' in index.content
     assert b'id="fixture-banner"' in index.content
     assert b'id="foot-staleness"' in index.content
+    assert b"/static/app.js" in index.content
 
 
 FIXTURE_PARAMS = {"as_of": "2026-07-22", "social": "fixture", "market": "fixture"}
