@@ -1,4 +1,4 @@
-methodology_version: "2.1.0"
+methodology_version: "2.2.0"
 score_kind: "editorial_descriptive"
 
 base:
@@ -7,6 +7,7 @@ base:
   winsorize: { lower: 0.01, upper: 0.99 }
   quality_margin: "operating"   # not "net"
   momentum_secondary_global: true
+  value_pe_ladder: [pe_forward, pe_ttm]
   value_ev_ladder: [ev_ebitda, ev_ebit, ev_sales]
   value_ev_inapplicable_sectors: [Financials, Real Estate]
 

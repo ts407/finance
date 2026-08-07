@@ -25,6 +25,11 @@ Serve bevorzugt den Store (`STANDING_PREFER_STORE=1`, optional `STANDING_SERVE_S
 
 Innerhalb der Value-Säule renormalisieren; `value_coverage` / `value_confidence` sichtbar.
 
+## 2b — Forward P/E ✅ (methodology 2.2.0)
+
+P/E-Leiter: `pe_forward` (Finnhub `forwardPeRatio`) → `pe_ttm`. Stufe in `value_pe_rung`.
+EDGAR liefert kein Konsens-Forward → fällt auf TTM zurück. Non-positive Multiples → Score 0.
+
 ## 3 — Margin-Qualität ✅
 
 - `standing metrics-report` — Missing/non-positive Share pro Kennzahl

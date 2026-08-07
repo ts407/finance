@@ -22,7 +22,8 @@ Per ticker cold path: **~2 Finnhub calls** (+ optional Stooq CSV). Batch job onl
 | `sector` | profile2 | `finnhubIndustry` → GICS-11 map | — | Finnhub industry ≠ GICS; static table required |
 | `listing` | seed lists | `US` / `ADR` | profile2 country/exchange heuristic | Admission uses this |
 | `market_cap` | profile2 | `marketCapitalization * 1e6` | metric `marketCapitalization * 1e6` | Finnhub reports millions |
-| `pe_ttm` | metric | `peTTM` | — | Ratio (not %) |
+| `pe_ttm` | metric | `peTTM` | — | Ratio (not %); trailing |
+| `pe_forward` | metric | `forwardPeRatio` | `forwardPE`, `peForward` | Consensus NTM; PE-ladder prefers this over TTM |
 | `pb` | metric | `pb` | — | Ratio |
 | `ev_ebitda` | metric | `currentEv/ebitdaAnnual` | `enterpriseValueMultipleTTM` | Ratio |
 | `roe` | metric | `roeTTM` | — | Often percent → `/100` when `|x| > 2` |

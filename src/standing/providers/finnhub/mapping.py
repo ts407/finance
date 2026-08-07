@@ -19,6 +19,7 @@ MARKET_COLUMNS = [
     "market_cap",
     "adv_20d",
     "pe_ttm",
+    "pe_forward",
     "pb",
     "ev_ebitda",
     "ev_ebit",
@@ -37,6 +38,8 @@ MARKET_COLUMNS = [
 # metric key → standing column (ratios / levels before unit normalize).
 METRIC_FIELD_MAP: dict[str, str] = {
     "peTTM": "pe_ttm",
+    "forwardPeRatio": "pe_forward",
+    "forwardPE": "pe_forward",
     "pb": "pb",
     "currentEv/ebitdaAnnual": "ev_ebitda",
     "enterpriseValueMultipleTTM": "ev_ebitda",  # secondary; applied if primary missing
@@ -136,6 +139,7 @@ def map_finnhub_row(
         "listing": listing_from_profile(profile, seed_listing),
         "market_cap": market_cap_usd(profile, metric),
         "pe_ttm": _pick_metric(metric, "peTTM"),
+        "pe_forward": _pick_metric(metric, "forwardPeRatio", "forwardPE", "peForward"),
         "pb": _pick_metric(metric, "pb"),
         "ev_ebitda": _pick_metric(metric, "currentEv/ebitdaAnnual", "enterpriseValueMultipleTTM"),
         "ev_ebit": _pick_metric(metric, "currentEv/ebitAnnual", "evEbitTTM"),

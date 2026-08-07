@@ -42,6 +42,7 @@ def test_map_finnhub_row_percent_normalize():
     assert row["sector"] == "Information Technology"
     assert row["listing"] == "US"
     assert row["pe_ttm"] == pytest.approx(32.4)
+    assert row["pe_forward"] == pytest.approx(28.5)
     assert row["pb"] == pytest.approx(45.2)
     assert row["ev_ebitda"] == pytest.approx(22.5)
     # roeTTM 147 → 1.47; operatingMarginTTM 30.5 → 0.305

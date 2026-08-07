@@ -98,6 +98,7 @@ class EdgarMarketProvider(MarketProvider, ProviderMeta):
                     "market_cap",
                     "adv_20d",
                     "pe_ttm",
+                    "pe_forward",
                     "pb",
                     "ev_ebitda",
                     "ev_ebit",

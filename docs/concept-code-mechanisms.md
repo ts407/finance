@@ -118,7 +118,7 @@ Required columns:
 
 ```
 ticker, sector, market_cap, adv_20d,
-pe_ttm, pb, ev_ebitda,
+pe_forward, pe_ttm, pb, ev_ebitda, ev_ebit, ev_sales,
 roe, operating_margin, revenue_growth_yoy,
 ret_1m, ret_3m, ret_6m, relative_volume
 ```
@@ -188,7 +188,7 @@ Within each GICS-11 sector:
 
 | Pillar | Inputs | Direction | Aggregation |
 |--------|--------|-----------|-------------|
-| **Value** | `pe_ttm`, `pb`, `ev_ebitda` | cheaper = better → invert `1/x` (non-positive multiples dropped) | **median** of three sub-percentiles |
+| **Value** | PE-ladder (`pe_forward`→`pe_ttm`), `pb`, EV-ladder | cheaper = better → invert `1/x` (non-positive → worst score 0) | **mean** of available sub-percentiles (renormalize) |
 | **Quality** | `roe`, `operating_margin`, `revenue_growth_yoy` | higher = better | **median** of three sub-percentiles |
 | **Momentum** | `ret_1m`, `ret_3m`, `ret_6m`, `relative_volume` | higher = better | **median** of four sub-percentiles |
 

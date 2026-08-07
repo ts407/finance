@@ -23,7 +23,7 @@ class MarketProvider(ABC):
     def fetch(self, as_of: date, tickers: list[str] | None = None) -> pd.DataFrame:
         """
         Return one row per ticker with at least:
-        ticker, sector, market_cap, adv_20d, pe_ttm, pb, ev_ebitda,
+        ticker, sector, market_cap, adv_20d, pe_ttm, pe_forward, pb, ev_ebitda,
         roe, operating_margin, revenue_growth_yoy,
         ret_1m, ret_3m, ret_6m, relative_volume
         """

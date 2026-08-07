@@ -9,7 +9,11 @@ import pytest
 from standing.config import load_scoring_config
 from standing.domain.scoring.base import pillar_percentiles
 from standing.domain.scoring.peer_buckets import assign_size_bucket, peer_group_key
-from standing.domain.scoring.value_metrics import resolve_ev_multiple, value_metric_frame
+from standing.domain.scoring.value_metrics import (
+    resolve_ev_multiple,
+    resolve_pe_multiple,
+    value_metric_frame,
+)
 from standing.pipeline.snapshot import run_snapshot
 from standing.pipeline.store import SnapshotExistsError, load_immutable, persist_immutable
 from standing.providers import FixtureMarketProvider, FixtureSocialProvider
@@ -29,6 +33,7 @@ def _toy_market() -> pd.DataFrame:
             ],
             "market_cap": [5e9, 15e9, 8e9, 250e9, 3e9, 400e9],
             "pe_ttm": [10.0, 20.0, 12.0, 18.0, None, 25.0],
+            "pe_forward": [9.0, None, 11.0, 16.0, 22.0, None],
             "pb": [1.0, 2.0, 0.8, 1.5, 3.0, 4.0],
             "ev_ebitda": [None, 10.0, 8.0, 9.0, None, None],
             "ev_ebit": [6.0, None, 7.0, 8.0, None, 12.0],
@@ -51,6 +56,32 @@ def test_ev_ladder_falls_back():
     row2 = pd.Series({"ev_ebitda": None, "ev_ebit": None, "ev_sales": 1.2})
     val2, rung2 = resolve_ev_multiple(row2)
     assert val2 == 1.2 and rung2 == "ev_sales"
+
+
+def test_pe_ladder_prefers_forward():
+    row = pd.Series({"pe_forward": 18.0, "pe_ttm": 22.0})
+    val, rung = resolve_pe_multiple(row)
+    assert val == 18.0 and rung == "pe_forward"
+    row2 = pd.Series({"pe_forward": None, "pe_ttm": 22.0})
+    val2, rung2 = resolve_pe_multiple(row2)
+    assert val2 == 22.0 and rung2 == "pe_ttm"
+    # Non-positive forward falls through to positive ttm
+    row3 = pd.Series({"pe_forward": -5.0, "pe_ttm": 15.0})
+    val3, rung3 = resolve_pe_multiple(row3)
+    assert val3 == 15.0 and rung3 == "pe_ttm"
+
+
+def test_pe_ladder_in_value_frame():
+    df = _toy_market()
+    framed = value_metric_frame(df)
+    # A has pe_forward → rung pe_forward; B has only pe_ttm
+    assert framed.loc[0, "value_pe_rung"] == "pe_forward"
+    assert framed.loc[1, "value_pe_rung"] == "pe_ttm"
+    assert framed.loc[0, "_pe_for_value"] == 9.0
+    assert framed.loc[1, "_pe_for_value"] == 20.0
+    pillars = pillar_percentiles(df, winsorize=(0.0, 1.0))
+    assert "value_pe_rung" in pillars.columns
+    assert pillars["value"].notna().all()
 
 
 def test_financials_skip_ev_and_renormalize():
