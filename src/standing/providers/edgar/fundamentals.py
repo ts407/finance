@@ -136,6 +136,7 @@ def extract_fundamentals(
         "market_cap": market_cap,
         "adv_20d": ohlcv.get("adv_20d"),
         "pe_ttm": pe_ttm,
+        "pe_forward": None,  # consensus NTM not available from EDGAR
         "pb": pb,
         "ev_ebitda": None,
         "ev_ebit": None,

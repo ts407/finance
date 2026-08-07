@@ -1,7 +1,7 @@
 {
   "universe_id": "fixture-gics11-v1",
   "universe_as_of": "2026-07-22",
-  "methodology_version": "2.1.0",
+  "methodology_version": "2.2.0",
   "scope": ["US", "ADR"],
   "min_market_cap_usd": 1000000000,
   "min_adv_usd_20d": 5000000,

@@ -283,6 +283,9 @@ function openDrawer(ticker) {
   if (row.value_coverage != null) {
     flags.push(`<span class="flag">value coverage ${fmt(row.value_coverage, 2)}</span>`);
   }
+  if (row.value_pe_rung) {
+    flags.push(`<span class="flag">P/E ${row.value_pe_rung}</span>`);
+  }
   if (row.value_ev_rung) {
     flags.push(`<span class="flag">EV ${row.value_ev_rung}</span>`);
   }

@@ -103,6 +103,7 @@ def cmd_metrics_report(args: argparse.Namespace) -> int:
     market, _social = _providers(args)
     frame = market.fetch(as_of)
     cols = [
+        "pe_forward",
         "pe_ttm",
         "pb",
         "ev_ebitda",
