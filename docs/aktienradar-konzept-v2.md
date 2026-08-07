@@ -48,7 +48,7 @@ Drei Dinge, die den Bauplan direkt betreffen — nicht Meinung, sondern geprüft
 
 | Größe | Konkrete Definition v1 | Peer-Frame |
 |---|---|---|
-| Value | Perzentil aus **P/E (TTM), P/B, EV/EBITDA** (günstiger = höher); Median über die drei Sub-Perzentile | sektorrelativ |
+| Value | Perzentil aus **P/E-Leiter (Forward → TTM), P/B, EV-Leiter** (günstiger = höher); Mittelwert der verfügbaren Sub-Perzentile | sektorrelativ |
 | Quality | Perzentil aus **ROE, Operating Margin (EBIT/Umsatz, TTM), Umsatzwachstum (YoY)** | sektorrelativ |
 | Momentum | Perzentil aus **1M/3M/6M-Total-Return + relativem Volumen** | sektorrelativ (primär) |
 

@@ -147,6 +147,7 @@ def score_cross_section(inputs: ScoreInputs, cfg: ScoringConfig) -> pd.DataFrame
                 "value_n_metrics": int(pillars.iloc[i].get("value_n_metrics", 0)),
                 "value_coverage": float(pillars.iloc[i].get("value_coverage", np.nan)),
                 "value_confidence": float(pillars.iloc[i].get("value_confidence", np.nan)),
+                "value_pe_rung": _cell_str(pillars.iloc[i].get("value_pe_rung", "")),
                 "value_ev_rung": _cell_str(pillars.iloc[i].get("value_ev_rung", "")),
                 "value_metric_set": _cell_str(pillars.iloc[i].get("value_metric_set", "")),
                 "quality_n_metrics": int(pillars.iloc[i].get("quality_n_metrics", 0)),

@@ -104,7 +104,7 @@ def pillar_percentiles(
     """
     Compute peer-relative V / Q / M percentiles with value coverage metadata.
 
-    Value: pe_ttm, pb, and EV-ladder (or sector-specific skip for Financials/REITs).
+    Value: PE-ladder (forward→ttm), pb, and EV-ladder (or skip for Financials/REITs).
     Within-pillar: mean of available metric percentiles (renormalize), not NaN pillar.
     """
     work = attach_size_buckets(value_metric_frame(df))
@@ -112,7 +112,7 @@ def pillar_percentiles(
     out = work[["ticker", "sector", "size_bucket"]].copy()
     out["peer_group"] = work["_peer"]
 
-    pe_pct = _multiple_to_value_percentile(work, "pe_ttm", peer_col="_peer", winsorize=winsorize)
+    pe_pct = _multiple_to_value_percentile(work, "_pe_for_value", peer_col="_peer", winsorize=winsorize)
     pb_pct = _multiple_to_value_percentile(work, "pb", peer_col="_peer", winsorize=winsorize)
     ev_pct = _multiple_to_value_percentile(work, "_ev_for_value", peer_col="_peer", winsorize=winsorize)
 
@@ -126,6 +126,7 @@ def pillar_percentiles(
     # Expected metrics: 2 for financials/REITs, 3 otherwise
     expected = np.where(inapplicable, 2, 3)
     out["value_coverage"] = (out["value_n_metrics"] / expected).clip(0, 1)
+    out["value_pe_rung"] = work["value_pe_rung"]
     out["value_ev_rung"] = work["value_ev_rung"]
     out["value_metric_set"] = work["value_metric_set"]
     # Confidence haircut: full coverage → 1.0; each missing metric reduces

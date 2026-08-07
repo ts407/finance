@@ -54,6 +54,7 @@ CSV_COLUMNS = [
     "attention_tilt",
     "final_standing",
     "value_coverage",
+    "value_pe_rung",
     "value_ev_rung",
     "value_metric_set",
     "s_obs",
@@ -117,6 +118,7 @@ class StandingRow(BaseModel):
     social_badge: str
     size_bucket: str | None = None
     value_coverage: float | None = None
+    value_pe_rung: str | None = None
     value_ev_rung: str | None = None
     value_metric_set: str | None = None
 
@@ -272,7 +274,7 @@ def _resolve_mode(value: str | None, allowed: tuple[str, ...], default: str) -> 
     return key
 
 
-_OPTIONAL_STRING_FIELDS = frozenset({"value_ev_rung", "value_metric_set", "size_bucket"})
+_OPTIONAL_STRING_FIELDS = frozenset({"value_pe_rung", "value_ev_rung", "value_metric_set", "size_bucket"})
 
 
 def _json_safe(value: Any, *, key: str | None = None) -> Any:
