@@ -18,7 +18,7 @@ def conn(tmp_path: Path):
 
 def test_migrate_creates_all_tables(conn):
     version = migrate(conn)
-    assert version == 1
+    assert version == 2
     tables = {
         r["name"]
         for r in conn.execute(
@@ -31,21 +31,22 @@ def test_migrate_creates_all_tables(conn):
         "positions",
         "thesis_snapshots",
         "journal_entries",
+        "daily_marks",
     }.issubset(tables)
 
 
 def test_migrate_is_idempotent(conn):
-    assert migrate(conn) == 1
-    assert migrate(conn) == 1
-    assert current_schema_version(conn) == 1
-    rows = conn.execute("SELECT version FROM schema_migrations").fetchall()
-    assert [r["version"] for r in rows] == [1]
+    assert migrate(conn) == 2
+    assert migrate(conn) == 2
+    assert current_schema_version(conn) == 2
+    rows = conn.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
+    assert [r["version"] for r in rows] == [1, 2]
 
 
 def test_schema_version_recorded(conn):
     migrate(conn)
     row = conn.execute(
-        "SELECT version, applied_at FROM schema_migrations WHERE version = 1"
+        "SELECT version, applied_at FROM schema_migrations WHERE version = 2"
     ).fetchone()
     assert row is not None
     assert row["applied_at"]

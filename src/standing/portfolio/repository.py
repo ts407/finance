@@ -202,6 +202,56 @@ class PortfolioRepository:
             ).fetchone()
         return self._row_to_snapshot(row) if row else None
 
+    def list_snapshots_on_date(
+        self, as_of: date, *, universe_version: str | None = None
+    ) -> list[ScannerSnapshot]:
+        if universe_version is None:
+            rows = self.conn.execute(
+                "SELECT * FROM scanner_snapshots WHERE date = ? ORDER BY ticker",
+                (as_of.isoformat(),),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """
+                SELECT * FROM scanner_snapshots
+                WHERE date = ? AND universe_version = ?
+                ORDER BY ticker
+                """,
+                (as_of.isoformat(), universe_version),
+            ).fetchall()
+        return [self._row_to_snapshot(r) for r in rows]
+
+    def upsert_daily_mark(self, *, as_of: date, ticker: str, close_price: float) -> None:
+        if close_price <= 0:
+            raise ValueError("close_price must be positive")
+        self.conn.execute(
+            """
+            INSERT INTO daily_marks (date, ticker, close_price)
+            VALUES (?, ?, ?)
+            ON CONFLICT (date, ticker) DO UPDATE SET close_price = excluded.close_price
+            """,
+            (as_of.isoformat(), ticker.upper(), float(close_price)),
+        )
+        self.conn.commit()
+
+    def get_mark(self, ticker: str, as_of: date) -> float | None:
+        row = self.conn.execute(
+            "SELECT close_price FROM daily_marks WHERE ticker = ? AND date = ?",
+            (ticker.upper(), as_of.isoformat()),
+        ).fetchone()
+        return float(row["close_price"]) if row else None
+
+    def get_mark_on_or_before(self, ticker: str, as_of: date) -> float | None:
+        row = self.conn.execute(
+            """
+            SELECT close_price FROM daily_marks
+            WHERE ticker = ? AND date <= ?
+            ORDER BY date DESC LIMIT 1
+            """,
+            (ticker.upper(), as_of.isoformat()),
+        ).fetchone()
+        return float(row["close_price"]) if row else None
+
     def delete_snapshot(self, snapshot_id: int) -> None:
         """Delete a snapshot; blocked while positions/journal reference it."""
         try:
