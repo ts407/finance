@@ -49,7 +49,7 @@ async function load() {
   els.status.textContent = "Loading holdings…";
   storeSource({ as_of: els.asOf.value, market: els.market.value, social: els.social.value });
   try {
-    const data = await apiGet(`/api/portfolio?${params().toString()}`);
+    const data = await apiGet(`/api/holdings?${params().toString()}`);
     positions = data.positions || [];
     const t = data.totals || {};
     els.metaOpen.textContent = String(t.open ?? 0);
@@ -91,7 +91,7 @@ function renderTable() {
 }
 
 async function openDossier(ticker) {
-  const data = await apiGet(`/api/portfolio/${encodeURIComponent(ticker)}?${params().toString()}`);
+  const data = await apiGet(`/api/holdings/${encodeURIComponent(ticker)}?${params().toString()}`);
   const pos = data.position;
   els.dosTicker.textContent = data.ticker;
   els.dosLead.textContent = data.held ? "Open holding" : (pos ? "Closed holding" : "No holding");

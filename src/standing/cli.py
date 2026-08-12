@@ -93,6 +93,16 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         f"market={snap.meta.get('market_provider')}  social={snap.meta.get('social_provider')}"
     )
     console.print(f"Wrote {path}")
+    # Keep portfolio SQLite scanner_snapshots in sync for buy/portfolio joins.
+    try:
+        from standing.portfolio.cli_support import open_repository
+        from standing.portfolio.sync import sync_standing_snapshot
+
+        repo = open_repository(Path(args.db) if getattr(args, "db", None) else None)
+        n = sync_standing_snapshot(repo, snap)
+        console.print(f"Synced {n} scanner_snapshots → portfolio DB")
+    except Exception as exc:
+        log.warning("portfolio snapshot sync skipped: %s", exc)
     return 0
 
 
@@ -659,6 +669,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(ing)
     ing.add_argument("--out", default="artifacts/snapshots")
     ing.add_argument("--force", action="store_true", help="Archive prior day file then overwrite")
+    ing.add_argument(
+        "--db",
+        default=None,
+        help="Portfolio SQLite path for scanner_snapshot sync (default: artifacts/portfolio/standing.db)",
+    )
     ing.set_defaults(func=cmd_ingest)
 
     mr = sub.add_parser("metrics-report", help="Missing/non-positive metric consistency over universe")

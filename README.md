@@ -70,7 +70,8 @@ Open **http://127.0.0.1:8000/**
 | `/api/snapshot` | JSON standings (`preset`, `sector`, `q`, `sort`, `as_of`) |
 | `/api/snapshot.csv` | CSV export with the same filters |
 | `/api/ticker/{ticker}` | Single-name evidence payload (+ holding/diary excerpt) |
-| `/api/portfolio` | Holdings + P&L vs current snapshot |
+| `/api/holdings` | Personal holdings log + P&L vs current snapshot |
+| `/api/portfolio` | SQLite book (buy/sell/journal/recalibrate) |
 | `/api/diary` | Append-only journal (`GET` list / `POST` note) |
 | `/api/client-logs` | Batched UI log ingest (`POST`) |
 

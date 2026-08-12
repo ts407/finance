@@ -142,7 +142,7 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
     price = float(raw_px if raw_px is not None else 100.0)
 
     opened = client.post(
-        "/api/portfolio",
+        "/api/holdings",
         json={
             "ticker": ticker,
             "shares": 5,
@@ -158,12 +158,12 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
     assert body["diary_entry"]["kind"] == "buy"
     position_id = body["position"]["id"]
 
-    book = client.get("/api/portfolio", params=params).json()
+    book = client.get("/api/holdings", params=params).json()
     assert ticker in book["held_tickers"]
     assert book["positions"][0]["pnl"]["shares"] == 5
     assert book["positions"][0]["buy_reason"].startswith("Grund")
 
-    dossier = client.get(f"/api/portfolio/{ticker}", params=params).json()
+    dossier = client.get(f"/api/holdings/{ticker}", params=params).json()
     assert dossier["held"] is True
     assert dossier["purchase_snapshot"]["scores"]["final_standing"] is not None
     assert dossier["current_snapshot"]["scores"]["last_price"] is not None
@@ -183,7 +183,7 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
     assert ticker in csv.text
 
     closed = client.post(
-        f"/api/portfolio/{position_id}/close",
+        f"/api/holdings/{position_id}/close",
         json={"close_price": price, **params},
     )
     assert closed.status_code == 200
