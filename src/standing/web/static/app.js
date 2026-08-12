@@ -261,10 +261,22 @@ function renderMeta() {
   if (stale.market) parts.push(`market ${stale.market}`);
   if (stale.social) parts.push(`attention ${stale.social}`);
   if (stale.scored) parts.push(`scored ${stale.scored}`);
+  if (m.portfolio_db_ok === false) {
+    parts.push(`portfolio DB error`);
+  } else if (m.portfolio_db) {
+    parts.push(`portfolio ok`);
+  }
+  if (m.as_of_fallback) {
+    parts.push(`as_of fallback from ${m.requested_as_of || "today"}`);
+  }
   els.footStaleness.textContent = parts.length ? parts.join(" · ") : "staleness —";
 
   const socialFixture = m.social_is_fixture === true || (m.social_mode || els.social.value) === "fixture";
   els.fixtureBanner.classList.toggle("hidden", !socialFixture);
+
+  if (m.portfolio_db_ok === false && m.portfolio_db_error) {
+    setStatus(`Portfolio DB issue: ${m.portfolio_db_error}`, "error");
+  }
 }
 
 function populateSectors() {
@@ -386,7 +398,7 @@ async function loadBook() {
       api("/api/portfolio/journal?limit=40"),
     ]);
     if (!book.positions.length) {
-      els.bookBody.innerHTML = `<tr class="state-row"><td colspan="10">No open positions. Open one from Standing or use Open position.</td></tr>`;
+      els.bookBody.innerHTML = `<tr class="state-row"><td colspan="10">No open positions yet. On Standing, open a ticker → <strong>Open position</strong>. Book stays empty until you buy.</td></tr>`;
     } else {
       els.bookBody.innerHTML = book.positions.map((p) => {
         const bucket = p.drift_bucket || "n/a";
@@ -943,6 +955,7 @@ function renderHolding(data) {
 }
 
 function bind() {
+  // Placeholders until health boot finishes
   els.asOf.value = todayISO();
   els.recalAsOf.value = todayISO();
   els.reload.addEventListener("click", () => loadSnapshot());
@@ -1064,9 +1077,6 @@ function bind() {
       closeModal();
       closeDrawer();
     }
-    if (e.key === "/" && document.activeElement !== els.filter && !els.modal.hidden === false) {
-      // only focus filter when modal closed
-    }
     if (e.key === "/" && document.activeElement !== els.filter && els.modal.hidden) {
       e.preventDefault();
       els.filter.focus();
@@ -1074,15 +1084,58 @@ function bind() {
   });
 }
 
+async function bootFromHealth() {
+  try {
+    const health = await api("/api/health");
+    state.health = health;
+    if (health.latest_snapshot_as_of) {
+      els.asOf.value = health.latest_snapshot_as_of;
+      els.recalAsOf.value = health.latest_snapshot_as_of;
+    } else {
+      els.asOf.value = todayISO();
+      els.recalAsOf.value = todayISO();
+    }
+    if (health.default_market && [...els.market.options].some((o) => o.value === health.default_market)) {
+      els.market.value = health.default_market;
+    }
+    if (health.default_social && [...els.social.options].some((o) => o.value === health.default_social)) {
+      els.social.value = health.default_social;
+    }
+    if (health.portfolio_db_ok === false) {
+      setStatus(
+        `Portfolio DB not ready (${health.portfolio_db_error || "unknown"}). `
+        + `Set STANDING_ROOT / writable artifacts. DB=${health.portfolio_db || "?"}`,
+        "error",
+      );
+    } else if (!health.latest_snapshot_as_of && health.prefer_store) {
+      setStatus(
+        "No ingested snapshots found. Run: standing ingest --market live --social open "
+        + "(or set Market/Attention to fixture for a demo).",
+        "empty",
+      );
+    }
+    logger.info("health boot", {
+      root: health.root,
+      latest_snapshot_as_of: health.latest_snapshot_as_of,
+      portfolio_db_ok: health.portfolio_db_ok,
+      snapshot_days: health.snapshot_days,
+    });
+  } catch (err) {
+    logger.error("health boot failed", { message: String(err.message || err) });
+    els.asOf.value = todayISO();
+    els.recalAsOf.value = todayISO();
+  }
+}
+
 function showError(err) {
   const msg = err && err.message ? err.message : String(err);
   logger.error("snapshot load failed", { message: msg });
   setStatus(`Failed to load: ${msg}`, "error");
-  const row = `<tr class="state-row error"><td colspan="10">Failed to load: ${msg}</td></tr>`;
+  const row = `<tr class="state-row error"><td colspan="10">Failed to load: ${escapeHtml(msg)}</td></tr>`;
   els.standingBody.innerHTML = row;
   els.heatBody.innerHTML = row;
 }
 
 logger.info("desk boot");
 bind();
-loadSnapshot();
+bootFromHealth().then(() => loadSnapshot());

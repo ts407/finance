@@ -63,6 +63,44 @@ def sync_standing_snapshot(
     return n
 
 
+def sync_standing_rows(
+    repo: PortfolioRepository,
+    *,
+    as_of,
+    universe_version: str,
+    rows: list[dict[str, Any]],
+    provider_state: dict[str, Any] | None = None,
+) -> int:
+    """Upsert arbitrary standing-row dicts (web payload) into scanner_snapshots."""
+    n = 0
+    state = provider_state or {}
+    for row in rows:
+        ticker = str(row.get("ticker") or "").upper()
+        score = row.get("final_standing")
+        if not ticker or score is None:
+            continue
+        coverage: dict[str, Any] = {}
+        if "value_coverage" in row:
+            coverage["value_coverage"] = row.get("value_coverage")
+        if "value_ev_rung" in row:
+            coverage["value_ev_rung"] = row.get("value_ev_rung")
+        if "sector_low_confidence" in row:
+            coverage["sector_low_confidence"] = bool(row.get("sector_low_confidence"))
+        repo.upsert_scanner_snapshot(
+            as_of=as_of,
+            ticker=ticker,
+            universe_version=universe_version,
+            score=float(score),
+            pillar_fundamentals=_opt_float(row.get("value")),
+            pillar_momentum=_opt_float(row.get("momentum")),
+            pillar_attention=_opt_float(row.get("s_used")),
+            coverage_flags=coverage,
+            provider_state=state,
+        )
+        n += 1
+    return n
+
+
 def _opt_float(value: Any) -> float | None:
     if value is None:
         return None
