@@ -679,23 +679,9 @@ def create_app() -> FastAPI:
             "position": detail,
         }
 
-    @app.get("/api/portfolio/{ticker}")
-    def portfolio_ticker(
-        ticker: str,
-        mark: float | None = Query(default=None, description="Optional mark price"),
-    ) -> dict[str, Any]:
-        repo = _portfolio_repo()
-        if repo is None:
-            raise HTTPException(status_code=503, detail="Portfolio DB unavailable")
-        try:
-            from standing.portfolio.overlay import position_detail
+    from standing.web.portfolio_api import router as portfolio_router
 
-            detail = position_detail(repo, ticker, mark_price=mark)
-        finally:
-            repo.conn.close()
-        if detail is None:
-            raise HTTPException(status_code=404, detail=f"No open position for {ticker.upper()}")
-        return detail
+    app.include_router(portfolio_router)
 
     @app.post("/api/client-logs")
     def client_logs(batch: ClientLogBatch, request: Request) -> JSONResponse:
