@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
