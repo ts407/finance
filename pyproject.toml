@@ -35,7 +35,7 @@ standing = "standing.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-standing = ["web/static/*"]
+standing = ["web/static/*", "portfolio/migrations/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
