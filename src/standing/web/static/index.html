@@ -92,6 +92,9 @@
     <div class="view-toggle" role="tablist" aria-label="Board">
       <button type="button" class="tab active" data-view="standing" role="tab" aria-selected="true">Standing</button>
       <button type="button" class="tab" data-view="heat" role="tab" aria-selected="false">Heat</button>
+      <button type="button" class="tab" data-view="book" role="tab" aria-selected="false">Book</button>
+      <button type="button" class="tab" data-view="review" role="tab" aria-selected="false">Review</button>
+      <button type="button" class="tab" data-view="recal" role="tab" aria-selected="false">Recalibrate</button>
     </div>
     <button type="button" class="ghost" id="export-csv">Export CSV</button>
     <button type="button" class="ghost" id="reload">Refresh</button>
@@ -122,6 +125,7 @@
               <th class="num">Tilt</th>
               <th class="num">Final</th>
               <th>Social</th>
+              <th>Hold</th>
             </tr>
           </thead>
           <tbody id="standing-body"></tbody>
@@ -153,6 +157,102 @@
         </table>
       </div>
     </section>
+
+    <section class="board hidden" id="board-book" data-panel="book">
+      <div class="board-head row-head">
+        <div>
+          <h2>Book</h2>
+          <p>Open positions, score drift, and journal — personal log, not advice</p>
+        </div>
+        <div class="head-actions">
+          <button type="button" class="ghost" id="btn-watchlist">Watchlist</button>
+          <button type="button" class="primary" id="btn-buy">Open position</button>
+        </div>
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Entry</th>
+              <th class="num">Now</th>
+              <th class="num">PnL%</th>
+              <th class="num">@entry</th>
+              <th class="num">Now score</th>
+              <th class="num">Drift</th>
+              <th class="num">→Target</th>
+              <th class="num">→Stop</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="book-body"></tbody>
+        </table>
+      </div>
+      <div class="board-head" style="margin-top:1.5rem">
+        <h2>Journal</h2>
+        <p>Append-only notes linked to tickers / positions</p>
+      </div>
+      <div class="journal-toolbar">
+        <button type="button" class="ghost" id="btn-journal">Add note</button>
+        <button type="button" class="ghost" id="btn-refresh-book">Refresh book</button>
+      </div>
+      <ol class="journal-feed" id="journal-feed"></ol>
+    </section>
+
+    <section class="board hidden" id="board-review" data-panel="review">
+      <div class="board-head row-head">
+        <div>
+          <h2>Review</h2>
+          <p>Closed positions with benchmark / decile attribution</p>
+        </div>
+        <button type="button" class="ghost" id="btn-refresh-review">Refresh</button>
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Hold days</th>
+              <th class="num">Realized</th>
+              <th class="num">Benchmark</th>
+              <th class="num">Decile</th>
+              <th class="num">Excess vs bench</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody id="review-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="board hidden" id="board-recal" data-panel="recal">
+      <div class="board-head">
+        <h2>Recalibrate</h2>
+        <p>Diagnostic only — measures score power; does not change weights</p>
+      </div>
+      <form class="recal-form" id="recal-form">
+        <label class="field">
+          <span>Window</span>
+          <input id="recal-window" value="90d" />
+        </label>
+        <label class="field">
+          <span>Min hold (days)</span>
+          <input id="recal-min-hold" type="number" min="1" value="30" />
+        </label>
+        <label class="field">
+          <span>As of</span>
+          <input id="recal-as-of" type="date" />
+        </label>
+        <button type="submit" class="primary" id="btn-recalibrate">Run recalibrate</button>
+      </form>
+      <div class="recal-summary" id="recal-summary"></div>
+      <div class="recal-suggestions" id="recal-suggestions"></div>
+      <pre class="recal-markdown" id="recal-markdown"></pre>
+      <div class="board-head" style="margin-top:1rem">
+        <h2>Prior reports</h2>
+      </div>
+      <ul class="report-list" id="report-list"></ul>
+    </section>
   </main>
 
   <aside class="drawer" id="drawer" aria-hidden="true">
@@ -163,7 +263,19 @@
       <p class="drawer-lead" id="drawer-lead">Evidence breakdown</p>
       <p class="drawer-flags" id="drawer-flags"></p>
 
+      <div class="drawer-actions" id="drawer-actions"></div>
+
       <div class="bars" id="drawer-bars"></div>
+
+      <section class="portfolio-panel hidden" id="drawer-portfolio" aria-label="Position">
+        <h3>Position</h3>
+        <div class="score-pair" id="drawer-score-pair"></div>
+        <div class="score-chart-wrap">
+          <svg class="score-chart" id="drawer-score-chart" viewBox="0 0 320 120" role="img" aria-label="Score time series"></svg>
+        </div>
+        <dl class="facts" id="drawer-portfolio-facts"></dl>
+        <ol class="journal-list" id="drawer-journal"></ol>
+      </section>
 
       <dl class="facts" id="drawer-facts"></dl>
 
@@ -174,6 +286,17 @@
     </div>
   </aside>
   <div class="scrim" id="scrim" hidden></div>
+
+  <div class="modal-scrim" id="modal-scrim" hidden></div>
+  <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-inner">
+      <button type="button" class="drawer-close" id="modal-close" aria-label="Close form">×</button>
+      <h2 id="modal-title">Form</h2>
+      <p class="modal-lead" id="modal-lead"></p>
+      <form id="modal-form" class="modal-form"></form>
+      <p class="modal-error" id="modal-error" role="alert"></p>
+    </div>
+  </div>
 
   <footer class="foot">
     <span id="foot-method">methodology —</span>

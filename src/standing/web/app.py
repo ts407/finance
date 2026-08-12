@@ -96,6 +96,12 @@ class StandingMeta(BaseModel):
     tilt_max: float | None = None
     attention_mode: str | None = None
     peer_frame: str | None = None
+    as_of_fallback: bool | None = None
+    requested_as_of: str | None = None
+    portfolio_sync_n: int | None = None
+    portfolio_db: str | None = None
+    portfolio_db_ok: bool | None = None
+    portfolio_db_error: str | None = None
 
 
 class StandingRow(BaseModel):
@@ -119,6 +125,7 @@ class StandingRow(BaseModel):
     value_coverage: float | None = None
     value_ev_rung: str | None = None
     value_metric_set: str | None = None
+    portfolio: dict[str, Any] | None = None
 
 
 class SnapshotResponse(BaseModel):
@@ -132,6 +139,17 @@ class HealthResponse(BaseModel):
     score_kind: str
     methodology_version: str
     placeholder: bool
+    root: str | None = None
+    portfolio_db: str | None = None
+    portfolio_db_ok: bool | None = None
+    portfolio_db_error: str | None = None
+    open_positions: int | None = None
+    snapshot_root: str | None = None
+    latest_snapshot_as_of: str | None = None
+    snapshot_days: int | None = None
+    default_market: str | None = None
+    default_social: str | None = None
+    prefer_store: bool | None = None
 
 
 class MethodologyResponse(BaseModel):
@@ -441,6 +459,72 @@ def _ingest_client_logs(entries: list[ClientLogEntry], *, client: str | None) ->
     return len(entries)
 
 
+def _portfolio_repo():
+    """Open portfolio DB if present/usable; return None on failure."""
+    try:
+        from standing.portfolio.cli_support import open_repository
+
+        return open_repository(os.environ.get("STANDING_PORTFOLIO_DB"))
+    except Exception as exc:
+        log.warning("portfolio DB unavailable: %s", exc)
+        return None
+
+
+def _portfolio_status() -> dict[str, Any]:
+    from standing.portfolio.db import DEFAULT_DB_PATH
+
+    path = Path(os.environ.get("STANDING_PORTFOLIO_DB") or DEFAULT_DB_PATH)
+    out: dict[str, Any] = {
+        "portfolio_db": str(path),
+        "portfolio_db_ok": False,
+        "portfolio_db_error": None,
+        "open_positions": None,
+    }
+    repo = _portfolio_repo()
+    if repo is None:
+        out["portfolio_db_error"] = "open/migrate failed — check STANDING_ROOT / write perms"
+        return out
+    try:
+        out["portfolio_db_ok"] = True
+        out["open_positions"] = len(repo.list_open_positions())
+        out["portfolio_db"] = str(Path(repo.conn.execute("PRAGMA database_list").fetchone()["file"]))
+    except Exception as exc:
+        out["portfolio_db_error"] = str(exc)
+    finally:
+        repo.conn.close()
+    return out
+
+
+def _sync_payload_to_portfolio(payload: dict[str, Any]) -> tuple[int | None, str | None]:
+    """Best-effort upsert of served standings into scanner_snapshots."""
+    repo = _portfolio_repo()
+    if repo is None:
+        return None, "portfolio DB unavailable"
+    try:
+        from standing.portfolio.sync import sync_standing_rows
+
+        meta = payload.get("meta") or {}
+        n = sync_standing_rows(
+            repo,
+            as_of=date.fromisoformat(str(meta["as_of"])),
+            universe_version=str(meta.get("universe_id") or "desk"),
+            rows=list(payload.get("standings") or []),
+            provider_state={
+                "market_provider": meta.get("market_provider"),
+                "social_provider": meta.get("social_provider"),
+                "market_mode": meta.get("market_mode"),
+                "social_mode": meta.get("social_mode"),
+                "served_from": meta.get("served_from"),
+            },
+        )
+        return n, None
+    except Exception as exc:
+        log.warning("portfolio sync failed: %s", exc)
+        return None, str(exc)
+    finally:
+        repo.conn.close()
+
+
 def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(
@@ -488,13 +572,31 @@ def create_app() -> FastAPI:
         return response
 
     @app.get("/api/health", response_model=HealthResponse)
-    def health() -> HealthResponse:
+    def health() -> dict[str, Any]:
+        from standing.config import ROOT
+        from standing.pipeline.store import DEFAULT_SNAPSHOT_ROOT, list_snapshot_days
+        from standing.portfolio.db import DEFAULT_DB_PATH
+
         cfg = load_scoring_config()
-        return HealthResponse(
-            score_kind=cfg.score_kind,
-            methodology_version=cfg.methodology_version,
-            placeholder=cfg.placeholder,
-        )
+        days = list_snapshot_days()
+        port = _portfolio_status()
+        return {
+            "status": "ok",
+            "score_kind": cfg.score_kind,
+            "methodology_version": cfg.methodology_version,
+            "placeholder": cfg.placeholder,
+            "root": str(ROOT),
+            "portfolio_db": port["portfolio_db"] or str(DEFAULT_DB_PATH),
+            "portfolio_db_ok": port["portfolio_db_ok"],
+            "portfolio_db_error": port["portfolio_db_error"],
+            "open_positions": port["open_positions"],
+            "snapshot_root": str(DEFAULT_SNAPSHOT_ROOT),
+            "latest_snapshot_as_of": days[-1].isoformat() if days else None,
+            "snapshot_days": len(days),
+            "default_market": _default_market_mode(),
+            "default_social": _default_social_mode(),
+            "prefer_store": _prefer_store_default(),
+        }
 
     @app.get("/api/methodology", response_model=MethodologyResponse)
     def methodology() -> dict[str, Any]:
@@ -509,10 +611,33 @@ def create_app() -> FastAPI:
         market: str | None,
         prefer_store: bool | None,
     ) -> tuple[date, str, str, dict[str, Any]]:
-        day = _parse_as_of(as_of)
+        from standing.pipeline.store import list_snapshot_days
+
         social_mode = _resolve_mode(social, SOCIAL_MODES, _default_social_mode())
         market_mode = _resolve_mode(market, MARKET_MODES, _default_market_mode())
         use_store = _prefer_store_default() if prefer_store is None else prefer_store
+
+        requested = as_of
+        fallback = False
+        day = _parse_as_of(as_of) if as_of else date.today()
+
+        if use_store:
+            days = list_snapshot_days()
+            if days and day not in days:
+                alt = days[-1]
+                log.warning(
+                    "No store snapshot for %s — using latest ingested day %s "
+                    "(homelab cold-start / as_of mismatch)",
+                    day.isoformat(),
+                    alt.isoformat(),
+                )
+                day = alt
+                fallback = True
+            elif not as_of and days:
+                day = days[-1]
+                fallback = True
+                log.info("as_of omitted — using latest store day %s", day.isoformat())
+
         try:
             payload = _cached_snapshot(
                 day.isoformat(), history_days, social_mode, market_mode, use_store
@@ -521,6 +646,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        payload["meta"]["as_of_fallback"] = fallback
+        payload["meta"]["requested_as_of"] = requested
         return day, social_mode, market_mode, payload
 
     @app.get("/api/snapshot", response_model=SnapshotResponse)
@@ -548,6 +676,14 @@ def create_app() -> FastAPI:
         )
         payload["meta"]["social_mode"] = social_mode
         payload["meta"]["market_mode"] = market_mode
+
+        sync_n, sync_err = _sync_payload_to_portfolio(payload)
+        port = _portfolio_status()
+        payload["meta"]["portfolio_sync_n"] = sync_n
+        payload["meta"]["portfolio_db"] = port.get("portfolio_db")
+        payload["meta"]["portfolio_db_ok"] = port.get("portfolio_db_ok")
+        payload["meta"]["portfolio_db_error"] = sync_err or port.get("portfolio_db_error")
+
         standings, heat, key = _apply_filters(
             list(payload["standings"]),
             q=q,
@@ -558,14 +694,24 @@ def create_app() -> FastAPI:
         if limit is not None:
             standings = standings[:limit]
             heat = heat[:limit]
+        repo = _portfolio_repo()
+        try:
+            from standing.portfolio.overlay import enrich_rows
+
+            standings = enrich_rows(standings, repo)
+            heat = enrich_rows(heat, repo)
+        finally:
+            if repo is not None:
+                repo.conn.close()
         log.info(
-            "snapshot response as_of=%s preset=%s sort_key=%s sector=%s q=%s n=%s",
+            "snapshot response as_of=%s preset=%s sort_key=%s sector=%s q=%s n=%s portfolio_ok=%s",
             _day.isoformat(),
             preset,
             key,
             sector or "-",
             q or "-",
             len(standings),
+            port.get("portfolio_db_ok"),
         )
         return {"meta": payload["meta"], "standings": standings, "heat": heat}
 
@@ -642,11 +788,25 @@ def create_app() -> FastAPI:
         if match is None:
             log.warning("ticker not found ticker=%s as_of=%s", ticker.upper(), _day.isoformat())
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not in universe")
+        repo = _portfolio_repo()
+        try:
+            from standing.portfolio.overlay import enrich_rows, position_detail
+
+            enriched = enrich_rows([match], repo)[0]
+            detail = position_detail(repo, ticker) if repo is not None else None
+        finally:
+            if repo is not None:
+                repo.conn.close()
         log.info("ticker detail ticker=%s as_of=%s", match["ticker"], _day.isoformat())
         return {
             "meta": {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode},
-            "row": match,
+            "row": enriched,
+            "position": detail,
         }
+
+    from standing.web.portfolio_api import router as portfolio_router
+
+    app.include_router(portfolio_router)
 
     @app.post("/api/client-logs")
     def client_logs(batch: ClientLogBatch, request: Request) -> JSONResponse:
