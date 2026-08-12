@@ -84,7 +84,7 @@ def test_portfolio_detail_endpoint(tmp_path: Path, monkeypatch):
     _seed_db(db, "AAPL")
     monkeypatch.setenv("STANDING_PORTFOLIO_DB", str(db))
     client = TestClient(create_app())
-    detail = client.get("/api/portfolio/AAPL", params={"mark": 200}).json()
+    detail = client.get("/api/portfolio/position/AAPL", params={"mark": 200}).json()
     assert detail["position"]["ticker"] == "AAPL"
     assert detail["thesis"]["falsifier"].startswith("Breaks")
     assert len(detail["journal"]) >= 1
@@ -100,7 +100,7 @@ def test_portfolio_detail_404(tmp_path: Path, monkeypatch):
     conn.close()
     monkeypatch.setenv("STANDING_PORTFOLIO_DB", str(db))
     client = TestClient(create_app())
-    resp = client.get("/api/portfolio/MSFT")
+    resp = client.get("/api/portfolio/position/MSFT")
     assert resp.status_code == 404
 
 
