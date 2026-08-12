@@ -240,6 +240,72 @@ def cmd_portfolio(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    from standing.portfolio.attribution import review_closed
+
+    repo = open_repository(_db_path(args))
+    rows = review_closed(repo)
+    table = Table(title="Closed-position review (attribution)")
+    table.add_column("ticker")
+    table.add_column("hold_days", justify="right")
+    table.add_column("realized", justify="right")
+    table.add_column("benchmark", justify="right")
+    table.add_column("decile", justify="right")
+    table.add_column("excess_b", justify="right")
+    table.add_column("excess_d", justify="right")
+    table.add_column("thesis_outcome", min_width=10)
+    if not rows:
+        console.print("[dim]No closed positions.[/dim]")
+        return 0
+    for r in rows:
+        table.add_row(
+            r.ticker,
+            str(r.hold_days),
+            f"{r.realized_return:+.4f}",
+            f"{r.benchmark_return:+.4f}" if r.benchmark_return is not None else "—",
+            f"{r.decile_return:+.4f}" if r.decile_return is not None else "—",
+            f"{r.excess_vs_benchmark:+.4f}" if r.excess_vs_benchmark is not None else "—",
+            f"{r.excess_vs_decile:+.4f}" if r.excess_vs_decile is not None else "—",
+            r.thesis_outcome,
+        )
+    console.print(table)
+    return 0
+
+
+def cmd_recalibrate(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from standing.portfolio.recalibrate import RecalibrateConfig, parse_window, run_recalibrate
+
+    repo = open_repository(_db_path(args))
+    try:
+        window_days = parse_window(args.window)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 2
+    cfg = RecalibrateConfig(
+        window_days=window_days,
+        min_hold_days=int(args.min_hold),
+        as_of=None,
+    )
+    if args.as_of:
+        from datetime import date as date_cls
+
+        cfg.as_of = date_cls.fromisoformat(args.as_of)
+    report_dir = Path(args.report_dir) if args.report_dir else None
+    result = run_recalibrate(repo, cfg, report_dir=report_dir)
+    console.print(
+        f"[bold]Recalibrate[/bold] as_of={result['as_of']}  "
+        f"n_positions={result['n_positions']}  "
+        f"spearman={result['score_power']['spearman_score_fwd']}  "
+        f"hit={result['score_power']['top_decile_hit_rate']}"
+    )
+    console.print(f"Wrote {result['report_path']}")
+    for s in result["suggestions"]:
+        console.print(f"  • {s}")
+    return 0
+
+
 def _parse_marks(values: list[str]) -> dict[str, float]:
     """Parse repeated ``--mark TICKER=PRICE`` flags."""
     out: dict[str, float] = {}
@@ -252,7 +318,7 @@ def _parse_marks(values: list[str]) -> dict[str, float]:
 
 
 def register_portfolio_commands(sub: argparse._SubParsersAction) -> None:
-    """Attach buy/sell/journal/watchlist/portfolio to the root parser."""
+    """Attach buy/sell/journal/watchlist/portfolio/review/recalibrate."""
 
     def add_db(sp: argparse.ArgumentParser) -> None:
         sp.add_argument(
@@ -312,3 +378,23 @@ def register_portfolio_commands(sub: argparse._SubParsersAction) -> None:
         help="Mark price TICKER=PRICE (repeatable) for pnl%% / distances",
     )
     port.set_defaults(func=cmd_portfolio)
+
+    rev = sub.add_parser("review", help="Closed positions with return attribution")
+    add_db(rev)
+    rev.set_defaults(func=cmd_review)
+
+    rec = sub.add_parser(
+        "recalibrate",
+        help="Diagnostic recalibration report (no automatic weight changes)",
+    )
+    add_db(rec)
+    rec.add_argument("--window", default="90d", help="Lookback window (e.g. 90d)")
+    rec.add_argument("--min-hold", type=int, default=30, dest="min_hold")
+    rec.add_argument("--as-of", default=None, dest="as_of", help="YYYY-MM-DD")
+    rec.add_argument(
+        "--report-dir",
+        default=None,
+        dest="report_dir",
+        help="Output directory (default: reports/)",
+    )
+    rec.set_defaults(func=cmd_recalibrate)

@@ -13,6 +13,7 @@ DEFAULT_DB_PATH = ROOT / "artifacts" / "portfolio" / "standing.db"
 # Ordered migration versions → SQL resource names under standing.portfolio.migrations
 MIGRATIONS: list[tuple[int, str]] = [
     (1, "001_initial.sql"),
+    (2, "002_daily_marks.sql"),
 ]
 
 
