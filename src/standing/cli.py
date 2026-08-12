@@ -762,6 +762,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ts.set_defaults(func=cmd_track_s_calibrate)
 
+    from standing.portfolio.commands import register_portfolio_commands
+
+    register_portfolio_commands(sub)
+
     return p
 
 
