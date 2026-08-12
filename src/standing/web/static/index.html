@@ -122,6 +122,7 @@
               <th class="num">Tilt</th>
               <th class="num">Final</th>
               <th>Social</th>
+              <th>Hold</th>
             </tr>
           </thead>
           <tbody id="standing-body"></tbody>
@@ -164,6 +165,16 @@
       <p class="drawer-flags" id="drawer-flags"></p>
 
       <div class="bars" id="drawer-bars"></div>
+
+      <section class="portfolio-panel hidden" id="drawer-portfolio" aria-label="Position">
+        <h3>Position</h3>
+        <div class="score-pair" id="drawer-score-pair"></div>
+        <div class="score-chart-wrap">
+          <svg class="score-chart" id="drawer-score-chart" viewBox="0 0 320 120" role="img" aria-label="Score time series"></svg>
+        </div>
+        <dl class="facts" id="drawer-portfolio-facts"></dl>
+        <ol class="journal-list" id="drawer-journal"></ol>
+      </section>
 
       <dl class="facts" id="drawer-facts"></dl>
 

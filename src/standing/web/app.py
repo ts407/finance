@@ -119,6 +119,7 @@ class StandingRow(BaseModel):
     value_coverage: float | None = None
     value_ev_rung: str | None = None
     value_metric_set: str | None = None
+    portfolio: dict[str, Any] | None = None
 
 
 class SnapshotResponse(BaseModel):
@@ -441,6 +442,17 @@ def _ingest_client_logs(entries: list[ClientLogEntry], *, client: str | None) ->
     return len(entries)
 
 
+def _portfolio_repo():
+    """Open portfolio DB if present/usable; return None on failure."""
+    try:
+        from standing.portfolio.cli_support import open_repository
+
+        return open_repository(os.environ.get("STANDING_PORTFOLIO_DB"))
+    except Exception as exc:
+        log.debug("portfolio DB unavailable: %s", exc)
+        return None
+
+
 def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(
@@ -558,6 +570,15 @@ def create_app() -> FastAPI:
         if limit is not None:
             standings = standings[:limit]
             heat = heat[:limit]
+        repo = _portfolio_repo()
+        try:
+            from standing.portfolio.overlay import enrich_rows
+
+            standings = enrich_rows(standings, repo)
+            heat = enrich_rows(heat, repo)
+        finally:
+            if repo is not None:
+                repo.conn.close()
         log.info(
             "snapshot response as_of=%s preset=%s sort_key=%s sector=%s q=%s n=%s",
             _day.isoformat(),
@@ -642,11 +663,39 @@ def create_app() -> FastAPI:
         if match is None:
             log.warning("ticker not found ticker=%s as_of=%s", ticker.upper(), _day.isoformat())
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not in universe")
+        repo = _portfolio_repo()
+        try:
+            from standing.portfolio.overlay import enrich_rows, position_detail
+
+            enriched = enrich_rows([match], repo)[0]
+            detail = position_detail(repo, ticker) if repo is not None else None
+        finally:
+            if repo is not None:
+                repo.conn.close()
         log.info("ticker detail ticker=%s as_of=%s", match["ticker"], _day.isoformat())
         return {
             "meta": {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode},
-            "row": match,
+            "row": enriched,
+            "position": detail,
         }
+
+    @app.get("/api/portfolio/{ticker}")
+    def portfolio_ticker(
+        ticker: str,
+        mark: float | None = Query(default=None, description="Optional mark price"),
+    ) -> dict[str, Any]:
+        repo = _portfolio_repo()
+        if repo is None:
+            raise HTTPException(status_code=503, detail="Portfolio DB unavailable")
+        try:
+            from standing.portfolio.overlay import position_detail
+
+            detail = position_detail(repo, ticker, mark_price=mark)
+        finally:
+            repo.conn.close()
+        if detail is None:
+            raise HTTPException(status_code=404, detail=f"No open position for {ticker.upper()}")
+        return detail
 
     @app.post("/api/client-logs")
     def client_logs(batch: ClientLogBatch, request: Request) -> JSONResponse:

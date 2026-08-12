@@ -256,6 +256,120 @@ tbody tr:nth-child(odd):hover { background: rgba(31, 111, 91, 0.08); }
 .badge.sparse { background: rgba(154, 107, 18, 0.16); color: var(--warn); }
 .badge.thin { background: rgba(18, 32, 27, 0.08); color: var(--muted); }
 
+.held-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(31, 111, 91, 0.14);
+  color: var(--accent);
+  vertical-align: middle;
+}
+tbody tr.held {
+  background: rgba(31, 111, 91, 0.05);
+}
+.score-pair-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+}
+.score-pair-inline .arrow { color: var(--muted); }
+.drift { font-weight: 700; }
+.drift-green { color: var(--accent); }
+.drift-yellow { color: var(--warn); }
+.drift-red { color: #b42318; }
+.drift-na { color: var(--muted); }
+.dim { color: var(--muted); }
+
+.portfolio-panel {
+  margin: 1rem 0 1.25rem;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid rgba(18, 32, 27, 0.08);
+}
+.portfolio-panel.hidden { display: none; }
+.portfolio-panel h3 {
+  font-family: "Fraunces", serif;
+  font-size: 1.05rem;
+  margin: 0 0 0.65rem;
+}
+.score-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+.score-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 5.5rem;
+  padding: 0.45rem 0.6rem;
+  background: rgba(18, 32, 27, 0.04);
+}
+.score-chip span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.score-chart-wrap {
+  margin: 0.5rem 0 0.85rem;
+}
+.score-chart {
+  width: 100%;
+  height: auto;
+  background: linear-gradient(180deg, rgba(31, 111, 91, 0.04), transparent);
+}
+.score-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+}
+.jmark { fill: #c45c26; }
+.chart-label, .chart-empty {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: "Manrope", sans-serif;
+}
+.journal-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+.journal-list li {
+  padding: 0.45rem 0.55rem;
+  background: rgba(18, 32, 27, 0.03);
+  font-size: 0.85rem;
+}
+.journal-list time {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.journal-list .jtype {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.journal-list p {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+}
+.flag.held {
+  background: rgba(31, 111, 91, 0.14);
+  color: var(--accent);
+}
+
 .heat-cell {
   display: flex;
   align-items: center;

@@ -34,6 +34,11 @@ const els = {
   drawerBars: document.getElementById("drawer-bars"),
   drawerFacts: document.getElementById("drawer-facts"),
   drawerNote: document.getElementById("drawer-note"),
+  drawerPortfolio: document.getElementById("drawer-portfolio"),
+  drawerScorePair: document.getElementById("drawer-score-pair"),
+  drawerScoreChart: document.getElementById("drawer-score-chart"),
+  drawerPortfolioFacts: document.getElementById("drawer-portfolio-facts"),
+  drawerJournal: document.getElementById("drawer-journal"),
   metaAsof: document.getElementById("meta-asof"),
   metaUniverse: document.getElementById("meta-universe"),
   metaN: document.getElementById("meta-n"),
@@ -172,8 +177,11 @@ function populateSectors() {
 }
 
 function standingRow(row) {
-  return `<tr data-ticker="${row.ticker}">
-    <td class="ticker">${row.ticker}</td>
+  const held = row.portfolio && row.portfolio.held;
+  const holdCell = held ? portfolioHoldCell(row.portfolio) : `<td class="dim">—</td>`;
+  const heldClass = held ? " held" : "";
+  return `<tr data-ticker="${row.ticker}" class="${heldClass.trim()}">
+    <td class="ticker">${row.ticker}${held ? ' <span class="held-badge">held</span>' : ""}</td>
     <td>${row.sector}</td>
     <td class="num">${fmt(row.value)}</td>
     <td class="num">${fmt(row.quality)}</td>
@@ -182,13 +190,31 @@ function standingRow(row) {
     <td class="num ${tiltClass(row.attention_tilt)}">${fmt(row.attention_tilt, 2)}</td>
     <td class="num"><strong>${fmt(row.final_standing)}</strong></td>
     <td><span class="badge ${row.social_badge}">${row.social_badge}</span></td>
+    ${holdCell}
   </tr>`;
+}
+
+function portfolioHoldCell(p) {
+  const drift = p.score_drift;
+  const bucket = p.drift_bucket || "n/a";
+  const bucketClass = bucket === "n/a" ? "na" : bucket;
+  const driftTxt = drift == null ? "—" : `${drift >= 0 ? "+" : ""}${Number(drift).toFixed(1)}`;
+  return `<td class="hold-cell">
+    <span class="score-pair-inline">
+      <span title="score @ entry">${fmt(p.score_at_entry)}</span>
+      <span class="arrow">→</span>
+      <span title="score now">${fmt(p.score_now)}</span>
+      <span class="drift drift-${bucketClass}">${driftTxt}</span>
+    </span>
+  </td>`;
 }
 
 function heatRow(row) {
   const width = Math.max(4, Math.min(100, Number(row.s_used) || 0));
-  return `<tr data-ticker="${row.ticker}">
-    <td class="ticker">${row.ticker}</td>
+  const held = row.portfolio && row.portfolio.held;
+  const heldClass = held ? " held" : "";
+  return `<tr data-ticker="${row.ticker}" class="${heldClass.trim()}">
+    <td class="ticker">${row.ticker}${held ? ' <span class="held-badge">held</span>' : ""}</td>
     <td class="num">
       <div class="heat-cell">
         <div class="heat-track"><div class="heat-fill" style="width:${width}%"></div></div>
@@ -208,7 +234,7 @@ function heatRow(row) {
 function renderTables() {
   const { standings, heat } = state.data;
   if (!standings.length) {
-    const empty = `<tr class="state-row"><td colspan="9">No rows match this preset / filter.</td></tr>`;
+    const empty = `<tr class="state-row"><td colspan="10">No rows match this preset / filter.</td></tr>`;
     els.standingBody.innerHTML = empty;
     els.heatBody.innerHTML = empty;
     return;
@@ -250,6 +276,9 @@ function openDrawer(ticker) {
   els.drawerLead.textContent = "Evidence breakdown — descriptive modules only";
 
   const flags = [];
+  if (row.portfolio && row.portfolio.held) {
+    flags.push(`<span class="flag held">held position</span>`);
+  }
   if (row.sector_low_confidence) {
     flags.push(`<span class="flag warn">sector low confidence (&lt;30 peers)</span>`);
   }
@@ -294,6 +323,8 @@ function openDrawer(ticker) {
     + `<strong>${m.market_mode || "market"} · ${m.social_mode || "social"}</strong>. `
     + "Not investment advice.";
 
+  renderPortfolioPanel(row);
+
   els.drawer.classList.add("open");
   els.drawer.setAttribute("aria-hidden", "false");
   els.scrim.hidden = false;
@@ -302,6 +333,125 @@ function openDrawer(ticker) {
       el.style.width = el.dataset.width;
     });
   });
+}
+
+function renderPortfolioPanel(row) {
+  const held = row.portfolio && row.portfolio.held;
+  if (!held) {
+    els.drawerPortfolio.classList.add("hidden");
+    els.drawerScoreChart.innerHTML = "";
+    els.drawerJournal.innerHTML = "";
+    els.drawerPortfolioFacts.innerHTML = "";
+    els.drawerScorePair.innerHTML = "";
+    return;
+  }
+  els.drawerPortfolio.classList.remove("hidden");
+  const p = row.portfolio;
+  const bucket = p.drift_bucket || "n/a";
+  const bucketClass = bucket === "n/a" ? "na" : bucket;
+  const driftTxt = p.score_drift == null
+    ? "—"
+    : `${p.score_drift >= 0 ? "+" : ""}${Number(p.score_drift).toFixed(1)}`;
+  els.drawerScorePair.innerHTML = `
+    <div class="score-chip">
+      <span>score@entry</span><strong>${fmt(p.score_at_entry)}</strong>
+    </div>
+    <div class="score-chip">
+      <span>score_now</span><strong>${fmt(p.score_now)}</strong>
+    </div>
+    <div class="score-chip">
+      <span>drift</span><strong class="drift drift-${bucketClass}">${driftTxt}</strong>
+    </div>`;
+
+  // Optimistic facts from overlay; enrich via detail API.
+  els.drawerPortfolioFacts.innerHTML = [
+    fact("Entry price", fmt(p.entry_price, 2)),
+    fact("Size", fmt(p.size, 2)),
+    fact("Target", p.target_price != null ? fmt(p.target_price, 2) : "—"),
+    fact("Stop", p.stop_price != null ? fmt(p.stop_price, 2) : "—"),
+    fact("Opened (UTC)", p.open_ts || "—"),
+  ].join("");
+  els.drawerJournal.innerHTML = `<li class="dim">Loading journal…</li>`;
+  els.drawerScoreChart.innerHTML = "";
+
+  fetch(`/api/portfolio/${encodeURIComponent(row.ticker)}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((detail) => {
+      if (!detail) {
+        els.drawerJournal.innerHTML = `<li class="dim">No position detail.</li>`;
+        return;
+      }
+      const d = detail.distances || {};
+      els.drawerPortfolioFacts.innerHTML = [
+        fact("Entry price", fmt(detail.position.entry_price, 2)),
+        fact("Size", fmt(detail.position.size, 2)),
+        fact("Target", d.target_price != null ? fmt(d.target_price, 2) : "—"),
+        fact("Stop", d.stop_price != null ? fmt(d.stop_price, 2) : "—"),
+        fact("Dist → target", d.dist_to_target_pct != null ? `${fmt(d.dist_to_target_pct, 1)}%` : "set --mark"),
+        fact("Dist → stop", d.dist_to_stop_pct != null ? `${fmt(d.dist_to_stop_pct, 1)}%` : "set --mark"),
+        fact("Conviction", detail.thesis ? detail.thesis.conviction : "—"),
+        fact("Falsifier", detail.thesis ? escapeHtml(detail.thesis.falsifier) : "—"),
+      ].join("");
+      drawScoreChart(detail.score_series || [], detail.journal || []);
+      els.drawerJournal.innerHTML = (detail.journal || []).map((e) =>
+        `<li><time datetime="${e.ts}">${formatLocal(e.ts)}</time>
+         <span class="jtype">${e.entry_type}</span>
+         <p>${escapeHtml(e.body)}</p></li>`
+      ).join("") || `<li class="dim">No journal entries.</li>`;
+    })
+    .catch(() => {
+      els.drawerJournal.innerHTML = `<li class="dim">Journal unavailable.</li>`;
+    });
+}
+
+function drawScoreChart(series, journal) {
+  const svg = els.drawerScoreChart;
+  const w = 320;
+  const h = 120;
+  const pad = 16;
+  if (!series.length) {
+    svg.innerHTML = `<text x="${pad}" y="${h / 2}" class="chart-empty">No score history</text>`;
+    return;
+  }
+  const xs = series.map((_, i) => i);
+  const ys = series.map((p) => Number(p.score));
+  const minY = Math.min(...ys, 0);
+  const maxY = Math.max(...ys, 100);
+  const spanY = Math.max(1e-6, maxY - minY);
+  const xAt = (i) => pad + (i / Math.max(1, series.length - 1)) * (w - 2 * pad);
+  const yAt = (v) => h - pad - ((v - minY) / spanY) * (h - 2 * pad);
+  const path = series.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(1)},${yAt(p.score).toFixed(1)}`).join(" ");
+  const journalMarks = (journal || []).map((e) => {
+    const day = (e.ts || "").slice(0, 10);
+    const idx = series.findIndex((p) => p.date === day);
+    if (idx < 0) return "";
+    return `<circle class="jmark" cx="${xAt(idx)}" cy="${yAt(series[idx].score)}" r="3.5">
+      <title>${escapeHtml(e.entry_type)}: ${escapeHtml((e.body || "").slice(0, 80))}</title>
+    </circle>`;
+  }).join("");
+  svg.innerHTML = `
+    <polyline class="score-line" fill="none" points=""></polyline>
+    <path class="score-line" d="${path}" fill="none" />
+    ${journalMarks}
+    <text x="${pad}" y="12" class="chart-label">${fmt(maxY, 0)}</text>
+    <text x="${pad}" y="${h - 4}" class="chart-label">${fmt(minY, 0)}</text>
+  `;
+}
+
+function formatLocal(iso) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function bar(label, value, cls, _raw = false) {
