@@ -1,0 +1,127 @@
+{
+  "phase": "loop-analyse-hypothese",
+  "kind": "recent_changes_review",
+  "as_of_review": "2026-08-13",
+  "head_commit": "a089bc6",
+  "focal_commit": "17e1d32",
+  "productive_config_unchanged_by_this_review": true,
+  "ist_zustand": {
+    "methodology_version": "2.1.0",
+    "placeholder": true,
+    "pillar_weights": {"value": 0.3333, "quality": 0.3333, "momentum": 0.3334},
+    "peer_frame": "sector",
+    "winsorize": {"lower": 0.01, "upper": 0.99},
+    "social_tilt": {
+      "attention_mode": "volume_plus_sentiment",
+      "sentiment_weight": 0.5,
+      "tilt_max": 5,
+      "beta": 1.5
+    },
+    "sentiment_calibrated": false,
+    "baseline_fixture_2026-07-22": {
+      "n_names": 54,
+      "mean_abs_tilt": 2.182846037254049,
+      "spearman_final_vs_composite": 0.9680358378087959,
+      "sparse_share": 0.0,
+      "delta_vs_pre_sentiment_baseline": {
+        "mean_abs_tilt_was": 5.730199234574004,
+        "spearman_was": 0.926066639058236,
+        "note": "Tilt magnitude dropped and composite alignment rose after productive attention_mode flipped to volume_plus_sentiment."
+      }
+    }
+  },
+  "recent_change_summary": {
+    "17e1d32": {
+      "title": "Live S&P 500 universe + unlock Track S with a calibrated sentiment axis",
+      "universe": {
+        "sectors_csv": 536,
+        "gics11_counts": {
+          "Information Technology": 85,
+          "Industrials": 80,
+          "Financials": 79,
+          "Health Care": 64,
+          "Consumer Discretionary": 52,
+          "Consumer Staples": 39,
+          "Utilities": 32,
+          "Real Estate": 31,
+          "Materials": 27,
+          "Communication Services": 24,
+          "Energy": 23
+        },
+        "wiring": "STANDING_UNIVERSE=seed; EDGAR no longer defaults unknown tickers to IT"
+      },
+      "sentiment_axis": {
+        "blend_sentiment": "volume=amplitude, neg_share=sign",
+        "productive_flip": "attention_mode volume_only → volume_plus_sentiment (sentiment_weight=0.5)",
+        "calibration_gate": "track-s-calibrate can flip sentiment_calibrated only if real panel passes; currently false"
+      },
+      "loop_mechanics": "Removed H-SOCIAL-LOCKED; TRACK_S_PERTURBATIONS + --track S enabled"
+    },
+    "prior_stack_same_day": [
+      "0449b3a dotted-override util / track-m-calibrate import fix",
+      "4f811d3 nan-string hygiene in snapshot/web serialization",
+      "live market adapters (EDGAR, Finnhub, Stooq/Yahoo, Wikipedia, Bluesky)",
+      "track-m-calibrate apparatus ok (μ_IC≈0.033, σ_IC≈0.154, T_80≈171d)"
+    ]
+  },
+  "loop_history": {
+    "cycles_1_to_3": "All Social tilt/beta shadows rejected (turnover and/or no forward evidence); placeholder blocks promote",
+    "track_m_calibrate": "passed; social_locked=true in calibration artifact",
+    "policy_tension": [
+      "Guardrails + track-s-social-feasibility skill still lock Score-Shadow on Social until live density exists",
+      "17e1d32 unlocked Track S in code and changed productive social_tilt without a vergleich decision",
+      "No artifacts/research/track_s calibration report yet; sentiment_calibrated remains false"
+    ]
+  },
+  "deviations": [
+    {
+      "id": "D1",
+      "finding": "Productive attention_mode changed without Vergleich",
+      "severity": "Optimization guardrails require comparison before productive scoring edits",
+      "severity": "volume_plus_sentiment is live in config while sentiment_calibrated=false and Track-S skill still says locked"
+    },
+    {
+      "id": "D2",
+      "finding": "Fixture baseline tilt regime shifted",
+      "detail": "mean|tilt| 5.73 → 2.18; spearman(final,composite) 0.926 → 0.968 — prior Social reject metrics are not directly comparable to the new axis"
+    },
+    {
+      "id": "D3",
+      "finding": "Track M levers never shadowed",
+      "detail": "C01–C03 only tested Social beta/tilt; momentum IC apparatus is calibrated but winsorize/weights/universe gates unused"
+    },
+    {
+      "id": "D4",
+      "finding": "Universe seed (~536) vs fixture eval (54)",
+      "detail": "peer_frame still sector; scoring.yaml notes switch to sector_x_size before 400–500 expansion eval; min_names_per_sector=30 unmet in several GICS buckets on seed alone"
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H20260722-08",
+      "track": "M",
+      "change": {"base.winsorize.lower": 0.02, "base.winsorize.upper": 0.98},
+      "rationale": "Address D3 — first Track-M lever after apparatus calibrate; offline turnover 0% on fixture",
+      "prediction": "mean_forward_spearman_lift non_negative_with_ci; ranking_turnover below 40% gate"
+    },
+    {
+      "id": "H20260722-09",
+      "track": "M",
+      "change": {"base.winsorize.lower": 0.005, "base.winsorize.upper": 0.995},
+      "rationale": "Symmetric alternative to H08 — looser winsorize; same offline gate",
+      "prediction": "mean_forward_spearman_lift non_negative_with_ci; ranking_turnover below 40% gate"
+    }
+  ],
+  "deferred_not_hypothesized": [
+    {
+      "id": "H-SOCIAL-RELOCK-POLICY",
+      "reason": "Per guardrails/skill: no Social score hypotheses until live density feasibility + sentiment_calibrated; productive sentiment flip should be reviewed/reverted via Vergleich before Track-S shadows"
+    },
+    {
+      "id": "H-PILLAR-WEIGHTS",
+      "reason": "momentum/value/quality weight bumps show 80%+ fixture ranking turnover — above offline safety gate; defer until winsorize/universe gates settle"
+    }
+  ],
+  "handoff": "loop-live-test-shadow",
+  "cycle_id": "C20260722-04"
+}
