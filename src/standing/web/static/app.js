@@ -1,4 +1,18 @@
 import { logger } from "./logger.js";
+import {
+  apiGet,
+  apiSend,
+  diaryCard,
+  escapeHtml,
+  factsHtml,
+  fmt,
+  fmtPnl,
+  fmtPx,
+  pnlClass,
+  scoreFacts,
+  storeSource,
+  todayISO,
+} from "./ledger.js";
 
 logger.setPage("desk");
 
@@ -7,6 +21,8 @@ const state = {
   data: null,
   loading: false,
   sectorsPopulated: false,
+  held: new Set(),
+  dossier: null,
 };
 
 const els = {
@@ -34,6 +50,16 @@ const els = {
   drawerBars: document.getElementById("drawer-bars"),
   drawerFacts: document.getElementById("drawer-facts"),
   drawerNote: document.getElementById("drawer-note"),
+  holdingEmpty: document.getElementById("holding-empty"),
+  holdingBody: document.getElementById("holding-body"),
+  holdingForm: document.getElementById("holding-form"),
+  holdShares: document.getElementById("hold-shares"),
+  holdCost: document.getElementById("hold-cost"),
+  holdReason: document.getElementById("hold-reason"),
+  holdThesis: document.getElementById("hold-thesis"),
+  diaryForm: document.getElementById("diary-form"),
+  diaryComment: document.getElementById("diary-comment"),
+  drawerDiary: document.getElementById("drawer-diary"),
   metaAsof: document.getElementById("meta-asof"),
   metaUniverse: document.getElementById("meta-universe"),
   metaN: document.getElementById("meta-n"),
@@ -44,15 +70,6 @@ const els = {
   footStaleness: document.getElementById("foot-staleness"),
   fixtureBanner: document.getElementById("fixture-banner"),
 };
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function fmt(n, digits = 1) {
-  if (n == null || Number.isNaN(Number(n))) return "—";
-  return Number(n).toFixed(digits);
-}
 
 function tiltClass(v) {
   return Number(v) >= 0 ? "tilt-pos" : "tilt-neg";
@@ -104,6 +121,12 @@ async function loadSnapshot() {
       throw new Error(err.detail || res.statusText);
     }
     state.data = await res.json();
+    storeSource({
+      as_of: els.asOf.value,
+      market: els.market.value,
+      social: els.social.value,
+    });
+    await loadHeld();
     renderMeta();
     populateSectors();
     renderTables();
@@ -172,8 +195,9 @@ function populateSectors() {
 }
 
 function standingRow(row) {
-  return `<tr data-ticker="${row.ticker}">
-    <td class="ticker">${row.ticker}</td>
+  const held = state.held.has(row.ticker);
+  return `<tr data-ticker="${row.ticker}" class="${held ? "is-held" : ""}">
+    <td class="ticker">${row.ticker}${held ? ' <span class="held-dot" title="In holdings">●</span>' : ""}</td>
     <td>${row.sector}</td>
     <td class="num">${fmt(row.value)}</td>
     <td class="num">${fmt(row.quality)}</td>
@@ -187,8 +211,9 @@ function standingRow(row) {
 
 function heatRow(row) {
   const width = Math.max(4, Math.min(100, Number(row.s_used) || 0));
-  return `<tr data-ticker="${row.ticker}">
-    <td class="ticker">${row.ticker}</td>
+  const held = state.held.has(row.ticker);
+  return `<tr data-ticker="${row.ticker}" class="${held ? "is-held" : ""}">
+    <td class="ticker">${row.ticker}${held ? ' <span class="held-dot" title="In holdings">●</span>' : ""}</td>
     <td class="num">
       <div class="heat-cell">
         <div class="heat-track"><div class="heat-fill" style="width:${width}%"></div></div>
@@ -286,13 +311,18 @@ function openDrawer(ticker) {
     fact("Social badge", row.social_badge),
     fact("Sector low-confidence", row.sector_low_confidence ? "yes" : "no"),
     fact("Source posture", `${m.market_provider} / ${m.social_provider}`),
+    fact("Last price", fmtPx(row.last_price)),
   ].join("");
 
   els.drawerNote.innerHTML =
     "Composite Standing averages sector-relative V/Q/M. "
     + "Attention Tilt uses tanh + shrinkage around neutral 50 and cannot dominate the base. "
     + `<strong>${m.market_mode || "market"} · ${m.social_mode || "social"}</strong>. `
-    + "Not investment advice.";
+    + "Tagebuch und Holdings sind persönliche Notizen, keine Anlageberatung.";
+
+  renderHolding(null);
+  els.drawerDiary.innerHTML = "";
+  loadDossier(row.ticker);
 
   els.drawer.classList.add("open");
   els.drawer.setAttribute("aria-hidden", "false");
@@ -333,6 +363,82 @@ function exportCsv() {
   window.location.href = `/api/snapshot.csv?${params.toString()}`;
 }
 
+function sourceBody() {
+  return {
+    as_of: els.asOf.value || todayISO(),
+    market: els.market.value,
+    social: els.social.value,
+  };
+}
+
+async function loadHeld() {
+  try {
+    const data = await apiGet(`/api/portfolio?${queryParams().toString()}`);
+    state.held = new Set(data.held_tickers || []);
+  } catch (err) {
+    logger.warn("portfolio held load failed", { message: String(err) });
+    state.held = new Set();
+  }
+}
+
+async function loadDossier(ticker) {
+  try {
+    const data = await apiGet(`/api/portfolio/${encodeURIComponent(ticker)}?${queryParams().toString()}`);
+    state.dossier = data;
+    renderHolding(data);
+    els.drawerDiary.innerHTML = (data.diary || []).slice(0, 6).map(diaryCard).join("")
+      || `<p class="muted">Noch keine Tagebuch-Einträge.</p>`;
+  } catch (err) {
+    logger.warn("dossier load failed", { ticker, message: String(err) });
+  }
+}
+
+function renderHolding(data) {
+  const pos = data && data.position;
+  const held = Boolean(data && data.held && pos);
+  els.holdingEmpty.classList.toggle("hidden", held);
+  els.holdingBody.classList.toggle("hidden", !held);
+  els.holdingForm.classList.toggle("hidden", held);
+  if (!held) {
+    const row = state.data && (
+      state.data.standings.find((r) => r.ticker === els.drawerTicker.textContent)
+      || {}
+    );
+    if (row.last_price != null) els.holdCost.value = Number(row.last_price).toFixed(2);
+    return;
+  }
+  const pnl = pos.pnl || {};
+  const buy = data.purchase_snapshot || pos.purchase_snapshot;
+  const cur = data.current_snapshot;
+  els.holdingBody.innerHTML = `
+    <p class="pnl ${pnlClass(pnl.pnl_abs)}">${escapeHtml(fmtPnl(pnl.pnl_abs, pnl.pnl_pct))}</p>
+    <dl class="facts">
+      ${factsHtml([
+        ["Shares", fmt(pnl.shares, 4)],
+        ["Avg cost", fmtPx(pnl.avg_cost)],
+        ["Last", fmtPx(pnl.last_price)],
+        ["Opened", pos.opened_at || "—"],
+      ])}
+    </dl>
+    <h4>Grund des Kaufens</h4>
+    <p>${escapeHtml(pos.buy_reason || data.buy_reason || "—")}</p>
+    <h4>These</h4>
+    <p>${escapeHtml(pos.thesis || data.thesis || "—")}</p>
+    <div class="compare-grid">
+      <div>
+        <h4>Daten zu Kauf</h4>
+        <dl class="facts">${factsHtml(scoreFacts(buy))}</dl>
+      </div>
+      <div>
+        <h4>Aktuelle Daten</h4>
+        <dl class="facts">${factsHtml(scoreFacts(cur))}</dl>
+      </div>
+    </div>
+    <p><a href="/portfolio#${encodeURIComponent(pos.ticker)}">Open in Portfolio</a>
+       · <a href="/diary?ticker=${encodeURIComponent(pos.ticker)}">Diary</a></p>
+  `;
+}
+
 function bind() {
   els.asOf.value = todayISO();
   els.reload.addEventListener("click", () => loadSnapshot());
@@ -361,6 +467,45 @@ function bind() {
   });
   els.drawerClose.addEventListener("click", closeDrawer);
   els.scrim.addEventListener("click", closeDrawer);
+  els.holdingForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const ticker = els.drawerTicker.textContent;
+    try {
+      await apiSend("/api/portfolio", "POST", {
+        ticker,
+        shares: Number(els.holdShares.value),
+        avg_cost: Number(els.holdCost.value),
+        buy_reason: els.holdReason.value,
+        thesis: els.holdThesis.value,
+        ...sourceBody(),
+      });
+      logger.info("holding saved", { ticker });
+      els.holdReason.value = "";
+      els.holdThesis.value = "";
+      await loadHeld();
+      renderTables();
+      await loadDossier(ticker);
+    } catch (err) {
+      setStatus(`Holding not saved: ${err.message}`, "error");
+    }
+  });
+  els.diaryForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const ticker = els.drawerTicker.textContent;
+    try {
+      await apiSend("/api/diary", "POST", {
+        ticker,
+        comment: els.diaryComment.value,
+        kind: "observation",
+        ...sourceBody(),
+      });
+      els.diaryComment.value = "";
+      logger.info("diary appended", { ticker });
+      await loadDossier(ticker);
+    } catch (err) {
+      setStatus(`Diary not saved: ${err.message}`, "error");
+    }
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDrawer();
     if (e.key === "/" && document.activeElement !== els.filter) {

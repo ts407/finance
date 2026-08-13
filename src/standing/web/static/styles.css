@@ -293,7 +293,7 @@ tbody tr:nth-child(odd):hover { background: rgba(31, 111, 91, 0.08); }
   position: fixed;
   top: 0;
   right: 0;
-  width: min(420px, 94vw);
+  width: min(520px, 96vw);
   height: 100%;
   z-index: 30;
   transform: translateX(105%);
@@ -481,6 +481,103 @@ kbd {
   color: var(--warn);
 }
 
+.held-dot {
+  color: var(--accent);
+  font-size: 0.7rem;
+  vertical-align: middle;
+}
+tr.is-held td.ticker { color: var(--accent); }
+
+.ledger-block {
+  margin: 1.25rem 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+.ledger-block h3, .ledger-block h4, .dossier-body h3, .dossier-body h4 {
+  margin: 0.85rem 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+.ledger-form {
+  display: grid;
+  gap: 0.55rem;
+}
+.ledger-form.compose {
+  grid-template-columns: 8rem 1fr auto;
+  align-items: end;
+  width: 100%;
+}
+.ledger-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.ledger-form input,
+.ledger-form textarea {
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+}
+.ledger-form textarea { min-height: 4.5rem; resize: vertical; }
+.ledger-form .grow { grid-column: span 1; }
+a.ghost {
+  display: inline-block;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.note-list { display: grid; gap: 0.75rem; }
+.note-list.wide { max-width: 720px; }
+.note-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+}
+.note-card header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+.note-card time, .note-meta, .muted {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.note-card p { margin: 0.25rem 0; line-height: 1.45; }
+.badge.buy, .badge.add { background: rgba(31, 111, 91, 0.16); }
+.badge.close { background: rgba(196, 92, 38, 0.16); color: var(--accent-2); }
+.badge.observation, .badge.note, .badge.thesis_update { background: rgba(18, 32, 27, 0.08); color: var(--muted); }
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-top: 0.5rem;
+}
+.workspace.split {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+.pnl { font-weight: 700; font-variant-numeric: tabular-nums; margin: 0 0 0.75rem; }
+.pnl-pos { color: var(--good); }
+.pnl-neg { color: var(--accent-2); }
+.dossier-body p { line-height: 1.45; }
+.hidden { display: none; }
+
 body.is-loading .table-shell {
   opacity: 0.72;
   transition: opacity 0.2s ease;
@@ -567,4 +664,6 @@ body.is-loading .table-shell {
   .view-toggle { width: 100%; justify-content: stretch; }
   .view-toggle .tab { flex: 1; }
   .drawer { width: 100vw; }
+  .workspace.split { grid-template-columns: 1fr; }
+  .compare-grid { grid-template-columns: 1fr; }
 }

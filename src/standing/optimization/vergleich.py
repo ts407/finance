@@ -199,6 +199,10 @@ def decide_from_shadow(
     else:
         decision = "reject"
 
+    from standing.desk.ledger import summarize_diary_for_vergleich
+
+    diary_summary = summarize_diary_for_vergleich()
+
     rationale_parts = []
     if accept_candidate and prod_cfg.placeholder:
         rationale_parts.append(
@@ -236,6 +240,16 @@ def decide_from_shadow(
         )
     rationale_parts.append(
         "No trading-journal entries available; qualitative diary reference skipped."
+        if diary_summary["n_entries"] == 0
+        else (
+            "Diary qualitative reference (not score-input): "
+            f"n_entries={diary_summary['n_entries']} n_tickers={diary_summary['n_tickers']}"
+            + (
+                f" latest={diary_summary['latest_utc']}."
+                if diary_summary.get("latest_utc")
+                else "."
+            )
+        )
     )
 
     return {
@@ -263,6 +277,7 @@ def decide_from_shadow(
         },
         "rationale": " ".join(rationale_parts),
         "promote_to_productive": bool(promote_ok),
+        "diary_qualitative": diary_summary,
     }
 
 

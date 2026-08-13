@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Standing — diary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <nav class="topnav" aria-label="Primary">
+    <a href="/" class="nav-brand">Standing</a>
+    <div class="nav-links">
+      <a href="/">Desk</a>
+      <a href="/portfolio">Portfolio</a>
+      <a href="/diary" aria-current="page">Diary</a>
+      <a href="/methodology">Methodology</a>
+    </div>
+  </nav>
+
+  <header class="masthead">
+    <div class="brand-block">
+      <p class="eyebrow">personal · append-only</p>
+      <h1 class="brand">Tagebuch</h1>
+      <p class="tagline">Your notes with a frozen desk snapshot (scores, social pulse, config). Historical judgement — not a recommendation.</p>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="Filters">
+    <label class="field"><span>Market</span>
+      <select id="market">
+        <option value="live">Live (EDGAR/Finnhub)</option>
+        <option value="edgar">SEC EDGAR</option>
+        <option value="stooq">Stooq/Yahoo OHLCV</option>
+        <option value="finnhub">Finnhub (+ key)</option>
+        <option value="fixture">Fixture</option>
+      </select>
+    </label>
+    <label class="field"><span>Attention</span>
+      <select id="social">
+        <option value="open">Wiki + Bluesky</option>
+        <option value="wikipedia">Wikipedia</option>
+        <option value="bluesky">Bluesky</option>
+        <option value="fixture">Fixture</option>
+        <option value="all">All</option>
+      </select>
+    </label>
+    <label class="field"><span>As of (for new notes)</span><input type="date" id="as-of" /></label>
+    <label class="field"><span>Ticker</span><input type="search" id="ticker" placeholder="AAPL" /></label>
+    <label class="field grow"><span>Search</span><input type="search" id="q" placeholder="Freitext" /></label>
+    <label class="field"><span>From</span><input type="date" id="since" /></label>
+    <label class="field"><span>To</span><input type="date" id="until" /></label>
+    <button type="button" class="ghost" id="reload">Filter</button>
+    <a class="ghost" id="export-csv" href="/api/diary.csv">Export CSV</a>
+    <a class="ghost" href="/api/diary.json">Export JSON</a>
+  </section>
+
+  <section class="controls">
+    <form id="compose" class="ledger-form compose">
+      <label>Ticker <input id="new-ticker" required maxlength="12" placeholder="MSFT" /></label>
+      <label class="grow">Kommentar
+        <textarea id="new-comment" required maxlength="8000" placeholder="Einschätzung / Beobachtung"></textarea>
+      </label>
+      <button type="submit" class="ghost">Append note</button>
+    </form>
+  </section>
+
+  <p class="disclaimer">Append-only. Each save captures Final / V / Q / M / tilt / social pulse / methodology_version at that UTC timestamp.</p>
+  <p class="status-line" id="status-line"></p>
+
+  <main class="workspace">
+    <div id="entries" class="note-list wide"></div>
+  </main>
+
+  <footer class="foot">
+    <span>qualitative loop reference only · never a score input</span>
+    <a href="/portfolio">Portfolio</a>
+  </footer>
+  <script src="/static/diary.js" type="module"></script>
+</body>
+</html>

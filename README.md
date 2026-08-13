@@ -62,12 +62,16 @@ Open **http://127.0.0.1:8000/**
 | URL | Purpose |
 |-----|---------|
 | http://127.0.0.1:8000/ | Standing desk (Final Standing + Attention Heat + evidence drawer) |
+| http://127.0.0.1:8000/portfolio | Holdings log with per-position P&L, Grund des Kaufens, These, purchase vs current desk data |
+| http://127.0.0.1:8000/diary | Append-only Börsen-Tagebuch (filter/search + CSV/JSON export) |
 | http://127.0.0.1:8000/methodology | Methodology page (live params from config) |
 | `/api/health` | Health + score_kind |
 | `/api/methodology` | Formulas + live scoring.yaml params |
 | `/api/snapshot` | JSON standings (`preset`, `sector`, `q`, `sort`, `as_of`) |
 | `/api/snapshot.csv` | CSV export with the same filters |
-| `/api/ticker/{ticker}` | Single-name evidence payload |
+| `/api/ticker/{ticker}` | Single-name evidence payload (+ holding/diary excerpt) |
+| `/api/portfolio` | Holdings + P&L vs current snapshot |
+| `/api/diary` | Append-only journal (`GET` list / `POST` note) |
 | `/api/client-logs` | Batched UI log ingest (`POST`) |
 
 Desk controls: presets (balanced / value_led / quality_led / momentum_led / attention_confirmed), sector filter, search (`/` focuses), CSV export.
@@ -119,6 +123,7 @@ src/standing/providers       # MarketProvider / SocialProvider (fixture ≡ live
 src/standing/universe        # admission + sector occupancy flags
 src/standing/pipeline        # snapshot runner + immutable day store
 src/standing/web             # FastAPI desk UI + JSON API
+src/standing/desk            # Personal holdings log + append-only diary
 src/standing/optimization    # shadow / vergleich optimization loop
 ```
 
@@ -130,6 +135,7 @@ src/standing/optimization    # shadow / vergleich optimization loop
 - Parameters are synthetic (`placeholder: true`) until an empirical freeze.
 - Track S is unlocked: the sentiment axis and Social levers flow through the optimization loop (`standing loop-analyse --track S`), but sentiment is not yet calibrated (`sentiment_calibrated: false`) and promotion stays blocked while `placeholder: true`.
 - Reddit/StockTwits remain fixture-only; Wikipedia + Bluesky are the open attention path.
+- Holdings / diary are a personal local ledger (`artifacts/desk/`, gitignored). Vergleich may cite diary counts as a qualitative note only — never as score or training input.
 - Not investment advice.
 
 ---

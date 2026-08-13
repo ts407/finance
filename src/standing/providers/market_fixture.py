@@ -97,6 +97,7 @@ def _synth_market(as_of: date, seed: int = 42) -> pd.DataFrame:
                 "ret_3m": float(rng.normal(0.03 * g, 0.12)),
                 "ret_6m": float(rng.normal(0.05 * g, 0.2)),
                 "relative_volume": float(np.clip(rng.lognormal(0.0, 0.35), 0.3, 5.0)),
+                "last_price": float(np.clip(rng.lognormal(4.6, 0.55), 8.0, 900.0)),
                 "as_of": as_of.isoformat(),
             }
         )

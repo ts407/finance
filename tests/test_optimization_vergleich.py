@@ -105,6 +105,7 @@ def test_decide_accept_candidate_without_promote():
     assert out["accept_candidate"] is True
     assert out["decision"] == "accept_candidate"
     assert out["promote_to_productive"] is False
+    assert out["diary_qualitative"]["score_input"] is False
 
 
 def test_run_vergleich_end_to_end(tmp_path: Path, monkeypatch):

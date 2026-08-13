@@ -25,7 +25,7 @@ def test_web_health_and_snapshot():
     assert payload["meta"]["social_is_fixture"] is True
     assert payload["meta"]["served_from"] in ("live", "store")
     assert len(payload["standings"]) > 0
-    assert "final_standing" in payload["standings"][0]
+    assert "last_price" in payload["standings"][0]
     assert "value_coverage" in payload["standings"][0]
     assert len(payload["heat"]) > 0
 
@@ -47,6 +47,9 @@ def test_web_health_and_snapshot():
     assert b'id="fixture-banner"' in index.content
     assert b'id="foot-staleness"' in index.content
     assert b"/static/app.js" in index.content
+    assert b'href="/portfolio"' in index.content
+    assert b'href="/diary"' in index.content
+    assert b"Grund des Kaufens" in index.content
 
 
 FIXTURE_PARAMS = {"as_of": "2026-07-22", "social": "fixture", "market": "fixture"}
@@ -106,6 +109,7 @@ def test_web_snapshot_csv():
     header = text.splitlines()[0]
     assert "ticker" in header and "sector" in header and "value" in header
     assert "size_bucket" in header
+    assert "last_price" in header
     assert len(text.strip().splitlines()) == 4  # header + 3 rows
 
 
@@ -124,3 +128,70 @@ def test_web_methodology():
     assert page.status_code == 200
     assert b"Methodology" in page.content
     assert b"/api/methodology" in page.content
+    assert b'href="/portfolio"' in page.content
+
+
+def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("STANDING_DESK_DIR", str(tmp_path / "desk"))
+    client = TestClient(create_app())
+    params = {**FIXTURE_PARAMS, "prefer_store": False}
+
+    snap = client.get("/api/snapshot", params=params).json()
+    ticker = snap["standings"][0]["ticker"]
+    raw_px = snap["standings"][0].get("last_price")
+    price = float(raw_px if raw_px is not None else 100.0)
+
+    opened = client.post(
+        "/api/portfolio",
+        json={
+            "ticker": ticker,
+            "shares": 5,
+            "avg_cost": price * 0.9,
+            "buy_reason": "Grund: coverage and quality look coherent vs peers.",
+            "thesis": "These: hold while Final stays descriptive, not a tip.",
+            **params,
+        },
+    )
+    assert opened.status_code == 200, opened.text
+    body = opened.json()
+    assert body["position"]["ticker"] == ticker
+    assert body["diary_entry"]["kind"] == "buy"
+    position_id = body["position"]["id"]
+
+    book = client.get("/api/portfolio", params=params).json()
+    assert ticker in book["held_tickers"]
+    assert book["positions"][0]["pnl"]["shares"] == 5
+    assert book["positions"][0]["buy_reason"].startswith("Grund")
+
+    dossier = client.get(f"/api/portfolio/{ticker}", params=params).json()
+    assert dossier["held"] is True
+    assert dossier["purchase_snapshot"]["scores"]["final_standing"] is not None
+    assert dossier["current_snapshot"]["scores"]["last_price"] is not None
+
+    note = client.post(
+        "/api/diary",
+        json={"ticker": ticker, "comment": "Beobachtung: tilt still bounded.", **params},
+    )
+    assert note.status_code == 200
+    diary = client.get("/api/diary", params={"ticker": ticker}).json()
+    assert diary["summary"]["score_input"] is False
+    assert diary["summary"]["n_entries"] >= 2
+    assert any("Beobachtung" in e["comment"] for e in diary["entries"])
+
+    csv = client.get("/api/diary.csv")
+    assert csv.status_code == 200
+    assert ticker in csv.text
+
+    closed = client.post(
+        f"/api/portfolio/{position_id}/close",
+        json={"close_price": price, **params},
+    )
+    assert closed.status_code == 200
+    assert closed.json()["position"]["status"] == "closed"
+
+    pages = client.get("/portfolio")
+    assert pages.status_code == 200
+    assert b"Grund des Kaufens" in pages.content
+    diary_page = client.get("/diary")
+    assert diary_page.status_code == 200
+    assert b"Tagebuch" in diary_page.content

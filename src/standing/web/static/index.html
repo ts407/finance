@@ -16,6 +16,8 @@
     <a href="/" class="nav-brand">Standing</a>
     <div class="nav-links">
       <a href="/" aria-current="page">Desk</a>
+      <a href="/portfolio">Portfolio</a>
+      <a href="/diary">Diary</a>
       <a href="/methodology">Methodology</a>
     </div>
   </nav>
@@ -166,6 +168,31 @@
       <div class="bars" id="drawer-bars"></div>
 
       <dl class="facts" id="drawer-facts"></dl>
+
+      <section class="ledger-block" id="drawer-holding">
+        <h3>Position</h3>
+        <p class="muted" id="holding-empty">Not in the holdings log.</p>
+        <div id="holding-body" class="hidden"></div>
+        <form id="holding-form" class="ledger-form">
+          <h4>In holdings aufnehmen</h4>
+          <label>Shares <input type="number" id="hold-shares" min="0" step="any" required /></label>
+          <label>Kurs zu Kauf <input type="number" id="hold-cost" min="0" step="any" required /></label>
+          <label>Grund des Kaufens <textarea id="hold-reason" required maxlength="4000"></textarea></label>
+          <label>These <textarea id="hold-thesis" required maxlength="8000"></textarea></label>
+          <button type="submit" class="ghost">Save holding + diary</button>
+        </form>
+      </section>
+
+      <section class="ledger-block">
+        <h3>Tagebuch</h3>
+        <form id="diary-form" class="ledger-form">
+          <label>Kommentar
+            <textarea id="diary-comment" required maxlength="8000" placeholder="Einschätzung, Beobachtung — keine Handlungsempfehlung."></textarea>
+          </label>
+          <button type="submit" class="ghost">Append diary note</button>
+        </form>
+        <div id="drawer-diary" class="note-list"></div>
+      </section>
 
       <p class="drawer-note" id="drawer-note">
         Composite Standing averages sector-relative V/Q/M.

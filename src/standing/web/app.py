@@ -45,6 +45,7 @@ ATTENTION_TILT_FLOOR = 1.0
 CSV_COLUMNS = [
     "ticker",
     "sector",
+    "last_price",
     "size_bucket",
     "value",
     "quality",
@@ -101,6 +102,7 @@ class StandingMeta(BaseModel):
 class StandingRow(BaseModel):
     ticker: str
     sector: str
+    last_price: float | None = None
     value: float | None = None
     quality: float | None = None
     momentum: float | None = None
@@ -160,6 +162,53 @@ class ClientLogEntry(BaseModel):
 
 class ClientLogBatch(BaseModel):
     entries: list[ClientLogEntry] = Field(default_factory=list, max_length=50)
+
+
+class DiaryCreate(BaseModel):
+    ticker: str = Field(min_length=1, max_length=12)
+    comment: str = Field(min_length=1, max_length=8000)
+    kind: Literal["observation", "note"] = "observation"
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+
+
+class PositionCreate(BaseModel):
+    ticker: str = Field(min_length=1, max_length=12)
+    shares: float = Field(gt=0)
+    avg_cost: float = Field(ge=0)
+    buy_reason: str = Field(min_length=1, max_length=4000)
+    thesis: str = Field(min_length=1, max_length=8000)
+    comment: str | None = Field(default=None, max_length=8000)
+    opened_at: str | None = None
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+
+
+class PositionNotesUpdate(BaseModel):
+    buy_reason: str | None = Field(default=None, max_length=4000)
+    thesis: str | None = Field(default=None, max_length=8000)
+    comment: str | None = Field(default=None, max_length=8000)
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+
+
+class PositionClose(BaseModel):
+    close_price: float | None = Field(default=None, ge=0)
+    comment: str | None = Field(default=None, max_length=8000)
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
 
 
 def _parse_as_of(value: str | None) -> date:
@@ -523,6 +572,32 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return day, social_mode, market_mode, payload
 
+    def _row_and_snapshot(
+        *,
+        ticker: str,
+        as_of: str | None,
+        history_days: int,
+        social: str | None,
+        market: str | None,
+        prefer_store: bool | None,
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        from standing.desk.ledger import capture_snapshot
+
+        _day, social_mode, market_mode, payload = _load_payload(
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
+        meta = {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode}
+        match = next(
+            (r for r in payload["standings"] if str(r["ticker"]).upper() == ticker.strip().upper()),
+            None,
+        )
+        snap = capture_snapshot(match, meta=meta)
+        return meta, match or {}, snap
+
     @app.get("/api/snapshot", response_model=SnapshotResponse)
     def snapshot(
         as_of: str | None = Query(default=None, description="YYYY-MM-DD"),
@@ -643,10 +718,215 @@ def create_app() -> FastAPI:
             log.warning("ticker not found ticker=%s as_of=%s", ticker.upper(), _day.isoformat())
             raise HTTPException(status_code=404, detail=f"Ticker {ticker} not in universe")
         log.info("ticker detail ticker=%s as_of=%s", match["ticker"], _day.isoformat())
+        from standing.desk.ledger import ticker_dossier
+
+        dossier = ticker_dossier(
+            match["ticker"],
+            current_row=match,
+            current_meta={**payload["meta"], "social_mode": social_mode, "market_mode": market_mode},
+        )
         return {
             "meta": {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode},
             "row": match,
+            "held": dossier["held"],
+            "position": dossier["position"],
+            "diary": dossier["diary"][:8],
         }
+
+    @app.get("/api/portfolio")
+    def portfolio(
+        as_of: str | None = Query(default=None),
+        history_days: int = Query(default=14, ge=7, le=60),
+        social: str | None = Query(default=None),
+        market: str | None = Query(default=None),
+        prefer_store: bool | None = Query(default=None),
+        include_closed: bool = Query(default=False),
+    ) -> dict[str, Any]:
+        from standing.desk.ledger import portfolio_view
+
+        _day, social_mode, market_mode, payload = _load_payload(
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
+        meta = {**payload["meta"], "social_mode": social_mode, "market_mode": market_mode}
+        by_ticker = {str(r["ticker"]).upper(): r for r in payload["standings"]}
+        view = portfolio_view(
+            current_by_ticker=by_ticker,
+            current_meta=meta,
+            include_closed=include_closed,
+        )
+        return {"meta": meta, **view}
+
+    @app.get("/api/portfolio/{ticker}")
+    def portfolio_ticker(
+        ticker: str,
+        as_of: str | None = Query(default=None),
+        history_days: int = Query(default=14, ge=7, le=60),
+        social: str | None = Query(default=None),
+        market: str | None = Query(default=None),
+        prefer_store: bool | None = Query(default=None),
+    ) -> dict[str, Any]:
+        from standing.desk.ledger import ticker_dossier
+
+        meta, match, _snap = _row_and_snapshot(
+            ticker=ticker,
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
+        dossier = ticker_dossier(ticker, current_row=match or None, current_meta=meta)
+        return {"meta": meta, **dossier}
+
+    @app.post("/api/portfolio")
+    def portfolio_open(body: PositionCreate) -> dict[str, Any]:
+        from standing.desk.ledger import open_or_add_position
+
+        _meta, _match, snap = _row_and_snapshot(
+            ticker=body.ticker,
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+        )
+        try:
+            result = open_or_add_position(
+                ticker=body.ticker,
+                shares=body.shares,
+                avg_cost=body.avg_cost,
+                buy_reason=body.buy_reason,
+                thesis=body.thesis,
+                snapshot=snap,
+                opened_at=body.opened_at,
+                comment=body.comment,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        log.info(
+            "portfolio open ticker=%s shares=%s avg_cost=%s",
+            body.ticker.upper(),
+            body.shares,
+            body.avg_cost,
+        )
+        return result
+
+    @app.patch("/api/portfolio/{position_id}")
+    def portfolio_notes(position_id: str, body: PositionNotesUpdate) -> dict[str, Any]:
+        from standing.desk.ledger import get_position, update_position_notes
+
+        pos = get_position(position_id)
+        if pos is None:
+            raise HTTPException(status_code=404, detail="Position not found")
+        _meta, _match, snap = _row_and_snapshot(
+            ticker=str(pos["ticker"]),
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+        )
+        try:
+            result = update_position_notes(
+                position_id,
+                buy_reason=body.buy_reason,
+                thesis=body.thesis,
+                snapshot=snap,
+                comment=body.comment,
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return result
+
+    @app.post("/api/portfolio/{position_id}/close")
+    def portfolio_close(position_id: str, body: PositionClose) -> dict[str, Any]:
+        from standing.desk.ledger import close_position, get_position
+
+        pos = get_position(position_id)
+        if pos is None:
+            raise HTTPException(status_code=404, detail="Position not found")
+        _meta, match, snap = _row_and_snapshot(
+            ticker=str(pos["ticker"]),
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+        )
+        close_px = body.close_price
+        if close_px is None:
+            close_px = match.get("last_price")
+        try:
+            result = close_position(
+                position_id,
+                close_price=close_px,
+                snapshot=snap,
+                comment=body.comment,
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        log.info("portfolio close id=%s ticker=%s", position_id, pos["ticker"])
+        return result
+
+    @app.get("/api/diary")
+    def diary_list(
+        ticker: str | None = Query(default=None),
+        q: str | None = Query(default=None),
+        since: str | None = Query(default=None),
+        until: str | None = Query(default=None),
+        kind: str | None = Query(default=None),
+    ) -> dict[str, Any]:
+        from standing.desk.ledger import read_diary, summarize_diary_for_vergleich
+
+        entries = read_diary(ticker=ticker, q=q, since=since, until=until, kind=kind)
+        return {"entries": entries, "summary": summarize_diary_for_vergleich()}
+
+    @app.post("/api/diary")
+    def diary_create(body: DiaryCreate) -> dict[str, Any]:
+        from standing.desk.ledger import append_diary, get_open_position
+
+        _meta, _match, snap = _row_and_snapshot(
+            ticker=body.ticker,
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+        )
+        held = get_open_position(body.ticker)
+        try:
+            entry = append_diary(
+                ticker=body.ticker,
+                comment=body.comment,
+                snapshot=snap,
+                kind=body.kind,
+                position_id=held["id"] if held else None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        log.info("diary append ticker=%s kind=%s", body.ticker.upper(), body.kind)
+        return {"entry": entry}
+
+    @app.get("/api/diary.csv")
+    def diary_csv() -> StreamingResponse:
+        from standing.desk.ledger import export_diary_csv
+
+        text = export_diary_csv()
+        return StreamingResponse(
+            iter([text]),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="standing_diary.csv"'},
+        )
+
+    @app.get("/api/diary.json")
+    def diary_json() -> JSONResponse:
+        from standing.desk.ledger import read_diary
+
+        return JSONResponse({"entries": read_diary()})
 
     @app.post("/api/client-logs")
     def client_logs(batch: ClientLogBatch, request: Request) -> JSONResponse:
@@ -661,6 +941,14 @@ def create_app() -> FastAPI:
     @app.get("/methodology")
     def methodology_page() -> FileResponse:
         return FileResponse(STATIC_DIR / "methodology.html")
+
+    @app.get("/portfolio")
+    def portfolio_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "portfolio.html")
+
+    @app.get("/diary")
+    def diary_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "diary.html")
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     log.info("Standing web app created")

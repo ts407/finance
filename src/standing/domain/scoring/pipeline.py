@@ -56,6 +56,21 @@ def _badge(n: float, sparse_below: float, ok_at: float) -> str:
     return "thin"
 
 
+def _cell_float(val: Any) -> float:
+    if val is None:
+        return float("nan")
+    try:
+        if pd.isna(val):
+            return float("nan")
+    except (TypeError, ValueError):
+        pass
+    try:
+        number = float(val)
+    except (TypeError, ValueError):
+        return float("nan")
+    return number
+
+
 def _cell_str(val: Any) -> str:
     """Serialize a dataframe cell for CSV/API string fields (never ``\"nan\"``)."""
     if val is None or (isinstance(val, float) and np.isnan(val)) or pd.isna(val):
@@ -131,12 +146,16 @@ def score_cross_section(inputs: ScoreInputs, cfg: ScoringConfig) -> pd.DataFrame
     final = final_standing(base.to_numpy(), tilt)
 
     badges = cfg.shrinkage["display_badges"]
+    price_col = "last_price" if "last_price" in market.columns else ("price" if "price" in market.columns else None)
+
     rows: list[dict[str, Any]] = []
     for i, t in enumerate(tickers):
+        last_price = _cell_float(market.iloc[i][price_col]) if price_col else float("nan")
         rows.append(
             {
                 "ticker": t,
                 "sector": market.iloc[i]["sector"],
+                "last_price": last_price,
                 "value": float(pillars.iloc[i]["value"]),
                 "quality": float(pillars.iloc[i]["quality"]),
                 "momentum": float(pillars.iloc[i]["momentum"]),

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Standing — portfolio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <nav class="topnav" aria-label="Primary">
+    <a href="/" class="nav-brand">Standing</a>
+    <div class="nav-links">
+      <a href="/">Desk</a>
+      <a href="/portfolio" aria-current="page">Portfolio</a>
+      <a href="/diary">Diary</a>
+      <a href="/methodology">Methodology</a>
+    </div>
+  </nav>
+
+  <header class="masthead">
+    <div class="brand-block">
+      <p class="eyebrow">personal · holdings log</p>
+      <h1 class="brand">Portfolio</h1>
+      <p class="tagline">Holdings with P&amp;L, Grund des Kaufens, These, and purchase vs current desk data. Not a broker. Not advice.</p>
+    </div>
+    <aside class="desk-meta">
+      <div class="meta-chip"><span>open</span><strong id="meta-open">—</strong></div>
+      <div class="meta-chip"><span>cost</span><strong id="meta-cost">—</strong></div>
+      <div class="meta-chip"><span>value</span><strong id="meta-value">—</strong></div>
+      <div class="meta-chip"><span>P&amp;L</span><strong id="meta-pnl">—</strong></div>
+    </aside>
+  </header>
+
+  <section class="controls" aria-label="Source">
+    <label class="field"><span>Market</span>
+      <select id="market">
+        <option value="live">Live (EDGAR/Finnhub)</option>
+        <option value="edgar">SEC EDGAR</option>
+        <option value="stooq">Stooq/Yahoo OHLCV</option>
+        <option value="finnhub">Finnhub (+ key)</option>
+        <option value="fixture">Fixture</option>
+      </select>
+    </label>
+    <label class="field"><span>Attention</span>
+      <select id="social">
+        <option value="open">Wiki + Bluesky</option>
+        <option value="wikipedia">Wikipedia</option>
+        <option value="bluesky">Bluesky</option>
+        <option value="fixture">Fixture</option>
+        <option value="all">All</option>
+      </select>
+    </label>
+    <label class="field"><span>As of</span><input type="date" id="as-of" /></label>
+    <label class="field"><span>Closed</span>
+      <select id="include-closed">
+        <option value="0">Open only</option>
+        <option value="1">Include closed</option>
+      </select>
+    </label>
+    <button type="button" class="ghost" id="reload">Refresh</button>
+  </section>
+  <p class="disclaimer">Personal log only. P&amp;L uses last desk price vs your average cost. Qualitative diary never trains the score.</p>
+  <p class="status-line" id="status-line" role="status"></p>
+
+  <main class="workspace split">
+    <section class="board">
+      <div class="board-head">
+        <h2>Holdings</h2>
+        <p>Click a name for Grund, These, Daten zu Kauf, aktuelle Daten</p>
+      </div>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Shares</th>
+              <th class="num">Avg</th>
+              <th class="num">Last</th>
+              <th class="num">P&amp;L</th>
+              <th>These</th>
+            </tr>
+          </thead>
+          <tbody id="hold-body"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="board dossier" id="dossier">
+      <div class="board-head">
+        <h2 id="dos-ticker">Select a holding</h2>
+        <p id="dos-lead">Asset dossier</p>
+      </div>
+      <div id="dos-body" class="dossier-body">
+        <p class="muted">Open a row to see Grund des Kaufens, These, purchase snapshot, live desk data, and the diary.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>personal ledger · append-only diary</span>
+    <a href="/">Back to desk</a>
+  </footer>
+  <script src="/static/portfolio.js" type="module"></script>
+</body>
+</html>
