@@ -15,7 +15,7 @@ def test_web_health_and_snapshot():
 
     snap = client.get(
         "/api/snapshot",
-        params={"as_of": "2026-07-22", "social": "fixture", "market": "fixture"},
+        params={"as_of": "2026-07-22", "social": "fixture", "market": "fixture", "prefer_store": False},
     )
     assert snap.status_code == 200
     payload = snap.json()
@@ -32,7 +32,7 @@ def test_web_health_and_snapshot():
     ticker = payload["standings"][0]["ticker"]
     detail = client.get(
         f"/api/ticker/{ticker}",
-        params={"as_of": "2026-07-22", "social": "fixture", "market": "fixture"},
+        params={"as_of": "2026-07-22", "social": "fixture", "market": "fixture", "prefer_store": False},
     )
     assert detail.status_code == 200
     assert detail.json()["row"]["ticker"] == ticker
@@ -52,7 +52,12 @@ def test_web_health_and_snapshot():
     assert b"Grund des Kaufens" in index.content
 
 
-FIXTURE_PARAMS = {"as_of": "2026-07-22", "social": "fixture", "market": "fixture"}
+FIXTURE_PARAMS = {
+    "as_of": "2026-07-22",
+    "social": "fixture",
+    "market": "fixture",
+    "prefer_store": False,
+}
 
 
 def test_web_filter_and_sort():

@@ -12,7 +12,12 @@ from standing.portfolio.repository import PortfolioRepository
 from standing.web.app import create_app
 
 FALSIFIER = "Breaks if gross margin compresses below 35% for two quarters."
-FIXTURE_PARAMS = {"as_of": "2026-07-22", "social": "fixture", "market": "fixture"}
+FIXTURE_PARAMS = {
+    "as_of": "2026-07-22",
+    "social": "fixture",
+    "market": "fixture",
+    "prefer_store": False,
+}
 
 
 def _seed_db(path: Path, ticker: str = "AAPL") -> None:

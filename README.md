@@ -108,7 +108,7 @@ Full formulas: **[docs/concept-code-mechanisms.md](docs/concept-code-mechanisms.
 | [`config/scoring.yaml`](config/scoring.yaml) | Methodology: pillar weights, tilt, shrinkage, `placeholder` |
 | [`config/rules.json`](config/rules.json) | Universe admission: caps, ADV, scope, `universe_id` |
 
-Current locks: `score_kind: editorial_descriptive` · `methodology_version: "2.1.0"` · `placeholder: true` · `tilt_max: 5` (bounded attention; `attention_mode: volume_plus_sentiment`, `sentiment_weight: 0.5`).
+Current locks: `score_kind: editorial_descriptive` · `methodology_version: "2.2.0"` · `placeholder: true` · `tilt_max: 5` (bounded attention; `attention_mode: volume_plus_sentiment`, `sentiment_weight: 0.5`).
 
 Universe: the live desk defaults to the compact fixture set; set `STANDING_UNIVERSE=seed` (or pass `full_universe`) to score the full seed universe (S&P 500 ∪ NDX100 ∪ liquid ADRs, ~535 names) with GICS-11 sectors from [`config/universe/sectors.csv`](config/universe/sectors.csv). Sector reference is sourced from the S&P 500 constituents list (GICS Sector); 9 of 11 sectors clear the ≥30-name confidence floor.
 
