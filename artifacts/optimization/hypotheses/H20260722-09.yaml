@@ -1,0 +1,22 @@
+id: H20260722-09
+cycle_id: C20260722-04
+created_utc: '2026-08-13T20:16:55.148367+00:00'
+basis: 'Track M cycle C20260722-04: offline winsorize_looser turnover=0.0% under safety
+  gate 30%. Evaluate with forward-return apparatus (see standing track-m-calibrate
+  / σ_IC).'
+change:
+- path: base.winsorize.lower
+  to: 0.005
+- path: base.winsorize.upper
+  to: 0.995
+prediction:
+  metric: mean_forward_spearman_lift
+  expected_direction: non_negative_with_ci
+  secondary_metric: ranking_turnover_vs_baseline
+  expected_secondary: below_40%_gate
+  rationale: winsorize_looser — Track M market lever.
+  track: M
+shadow_config: /workspace/artifacts/optimization/configs/H20260722-09_20260813T201655Z.yaml
+productive_config: config/scoring.yaml
+handoff: loop-live-test-shadow
+status: ready_for_shadow

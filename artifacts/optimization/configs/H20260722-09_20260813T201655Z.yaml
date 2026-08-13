@@ -7,8 +7,8 @@ base:
     momentum: 0.3334
   peer_frame: sector
   winsorize:
-    lower: 0.01
-    upper: 0.99
+    lower: 0.005
+    upper: 0.995
   quality_margin: operating
   momentum_secondary_global: true
   value_ev_ladder:
