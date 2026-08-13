@@ -18,5 +18,8 @@ prediction:
   track: M
 shadow_config: artifacts/optimization/configs/H20260722-08_20260813T201655Z.yaml
 productive_config: config/scoring.yaml
-handoff: loop-live-test-shadow
-status: ready_for_shadow
+handoff: loop-analyse-hypothese
+status: decision_reject
+shadow_report: artifacts/optimization/shadow/H20260722-08/shadow_report_2026-08-05_2026-08-13.json
+shadow_capture: artifacts/optimization/shadow/H20260722-08/capture_2026-08-05_2026-08-13.csv
+decision_path: artifacts/optimization/decisions/H20260722-08_decision.json

@@ -1,0 +1,104 @@
+{
+  "phase": "loop-vergleich-entscheidung",
+  "hypothesis_id": "H20260722-08",
+  "cycle_id": "C20260722-04",
+  "shadow_report": "artifacts/optimization/shadow/H20260722-08/shadow_report_2026-08-05_2026-08-13.json",
+  "timestamp_utc": "2026-08-13T20:49:06.727395+00:00",
+  "decision": "reject",
+  "accepted": false,
+  "accept_candidate": false,
+  "checks": {
+    "turnover_le_max": true,
+    "tilt_decreased": true,
+    "forward_evidence": false,
+    "spearman_lift_ge_min": false,
+    "lift_ci_excludes_zero": false,
+    "track_m_social_unchanged": true,
+    "social_gap_not_worse": true,
+    "placeholder_allows_promote": false,
+    "accept_candidate": false
+  },
+  "thresholds": {
+    "max_mean_ranking_turnover": 0.4,
+    "require_tilt_decrease": true,
+    "require_forward_evidence": true,
+    "min_spearman_lift": 0.02,
+    "allow_promote_when_placeholder": false
+  },
+  "metrics": {
+    "spearman_lift": 0.0,
+    "spearman_lift_bootstrap": {
+      "mean": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "n": 7
+    },
+    "ranking_turnover": 0.0,
+    "ranking_turnover_bootstrap": {
+      "mean": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "n": 7
+    },
+    "tilt_delta": 0.0,
+    "forward_spearman_lift_bootstrap": {
+      "mean": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "n": 7
+    },
+    "top_decile_excess_lift_bootstrap": {
+      "mean": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0,
+      "n": 7
+    },
+    "forward": {
+      "n_forward_days": 7,
+      "mean_spearman_score_vs_forward_productive": -0.03190394511149228,
+      "mean_spearman_score_vs_forward_shadow": -0.03190394511149228,
+      "mean_forward_spearman_lift": 0.0,
+      "daily_forward_spearman_lift": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mean_top_decile_excess_productive": -0.004473981115048756,
+      "mean_top_decile_excess_shadow": -0.004473981115048756,
+      "mean_top_decile_excess_lift": 0.0,
+      "daily_top_decile_excess_lift": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "return_col": "ret_1m",
+      "note": "Forward proxy = next weekday fixture ret_1m after score date; not live realized returns."
+    },
+    "social_gap": {
+      "productive_turnover_full_vs_gap": 0.8148148148148148,
+      "shadow_turnover_full_vs_gap": 0.8148148148148148,
+      "gap_turnover_delta_shadow_minus_prod": 0.0
+    }
+  },
+  "rationale": "Productive config remains placeholder=true — auto-promotion blocked by epistemic lock. Forward-return proxy (next-weekday fixture ret_1m): spearman_lift=+0.0000 CI[+0.0000,+0.0000]; top_decile_excess_lift=+0.0000 CI[+0.0000,+0.0000]; evidence=no. Composite-alignment spearman lift +0.0000 is informational only (threshold 0.02, not met). Social-gap turnover: prod=81.5%, shadow=81.5%. No trading-journal entries available; qualitative diary reference skipped.",
+  "promote_to_productive": false,
+  "diary_qualitative": {
+    "n_entries": 0,
+    "n_tickers": 0,
+    "tickers": [],
+    "kinds": {},
+    "latest_utc": null,
+    "score_input": false
+  },
+  "next_phase": "loop-analyse-hypothese",
+  "productive_config_unchanged": true,
+  "decision_path": "artifacts/optimization/decisions/H20260722-08_decision.json"
+}
