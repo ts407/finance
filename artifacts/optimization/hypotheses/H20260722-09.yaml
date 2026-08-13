@@ -16,7 +16,7 @@ prediction:
   expected_secondary: below_40%_gate
   rationale: winsorize_looser — Track M market lever.
   track: M
-shadow_config: /workspace/artifacts/optimization/configs/H20260722-09_20260813T201655Z.yaml
+shadow_config: artifacts/optimization/configs/H20260722-09_20260813T201655Z.yaml
 productive_config: config/scoring.yaml
 handoff: loop-live-test-shadow
 status: ready_for_shadow
