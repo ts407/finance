@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from standing.portfolio.db import DEFAULT_DB_PATH, connect, migrate
+from standing.config import default_portfolio_db
+from standing.portfolio.db import connect, migrate
 from standing.portfolio.repository import PortfolioRepository
 
 _HORIZON_RE = re.compile(
@@ -46,7 +47,10 @@ def parse_horizon(value: str | int) -> int:
 
 def open_repository(db_path: Path | str | None = None) -> PortfolioRepository:
     """Connect, migrate, and return a repository bound to the DB path."""
-    path = Path(db_path) if db_path is not None else DEFAULT_DB_PATH
+    if db_path is None or str(db_path).strip() == "":
+        path = default_portfolio_db()
+    else:
+        path = Path(db_path).expanduser()
     conn = connect(path)
     migrate(conn)
     return PortfolioRepository(conn)

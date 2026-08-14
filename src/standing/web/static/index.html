@@ -298,6 +298,13 @@
       <section class="ledger-block">
         <h3>Tagebuch</h3>
         <form id="diary-form" class="ledger-form">
+          <label>Art
+            <select id="diary-kind">
+              <option value="observation">Beobachtung</option>
+              <option value="note">Notiz</option>
+              <option value="thesis_update">These-Update</option>
+            </select>
+          </label>
           <label>Kommentar
             <textarea id="diary-comment" required maxlength="8000" placeholder="Einschätzung, Beobachtung — keine Handlungsempfehlung."></textarea>
           </label>

@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 def _repo() -> PortfolioRepository:
     try:
-        return open_repository(os.environ.get("STANDING_PORTFOLIO_DB"))
+        return open_repository(os.environ.get("STANDING_PORTFOLIO_DB") or None)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Portfolio DB unavailable: {exc}") from exc
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from standing.portfolio.db import DEFAULT_DB_PATH, connect, migrate
+from standing.portfolio.db import connect, migrate
 from standing.portfolio.exceptions import (
     FalsifierTooShortError,
     PortfolioError,
@@ -24,7 +24,6 @@ from standing.portfolio.models import (
 from standing.portfolio.repository import PortfolioRepository
 
 __all__ = [
-    "DEFAULT_DB_PATH",
     "CloseReason",
     "FalsifierTooShortError",
     "JournalEntry",

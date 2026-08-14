@@ -324,7 +324,7 @@ def register_portfolio_commands(sub: argparse._SubParsersAction) -> None:
         sp.add_argument(
             "--db",
             default=None,
-            help="SQLite path (default: artifacts/portfolio/standing.db)",
+            help="SQLite path (default: $STANDING_DATA_DIR/portfolio/standing.db)",
         )
 
     buy = sub.add_parser("buy", help="Open position + immutable thesis + journal entry")

@@ -127,3 +127,25 @@ def test_sync_standing_snapshot(tmp_path: Path):
     latest = repo.get_latest_snapshot(str(snap.standings.iloc[0]["ticker"]))
     assert latest is not None
     assert latest.score == float(snap.standings.iloc[0]["final_standing"])
+
+
+def test_diary_create_reads_sqlite_book_marks(tmp_path: Path, monkeypatch):
+    db = tmp_path / "p.db"
+    _seed_db(db, "AAPL")
+    monkeypatch.setenv("STANDING_PORTFOLIO_DB", str(db))
+    monkeypatch.setenv("STANDING_DESK_DIR", str(tmp_path / "desk"))
+    client = TestClient(create_app())
+    note = client.post(
+        "/api/diary",
+        json={"ticker": "AAPL", "comment": "Book overlay should fill Zielkurs.", **FIXTURE_PARAMS},
+    )
+    assert note.status_code == 200, note.text
+    marks = note.json()["entry"]["marks"]
+    assert marks["entry_price"] == 190.0
+    assert marks["target_price"] == 220.0
+    assert marks["stop_price"] == 170.0
+    assert marks["shares"] == 10.0
+    assert marks["last_price"] is not None
+    assert marks["final_standing"] is not None
+    assert marks["pnl_abs"] is not None
+

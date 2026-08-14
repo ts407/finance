@@ -67,6 +67,7 @@ const els = {
   holdReason: document.getElementById("hold-reason"),
   holdThesis: document.getElementById("hold-thesis"),
   diaryForm: document.getElementById("diary-form"),
+  diaryKind: document.getElementById("diary-kind"),
   diaryComment: document.getElementById("diary-comment"),
   drawerDiary: document.getElementById("drawer-diary"),
   drawerPortfolio: document.getElementById("drawer-portfolio"),
@@ -556,7 +557,7 @@ function openDrawer(ticker) {
     fact("Social badge", row.social_badge),
     fact("Sector low-confidence", row.sector_low_confidence ? "yes" : "no"),
     fact("Source posture", `${m.market_provider} / ${m.social_provider}`),
-    fact("Last price", fmtPx(row.last_price)),
+    fact("Aktueller Kurs", fmtPx(row.last_price)),
   ].join("");
 
   els.drawerNote.innerHTML =
@@ -610,9 +611,9 @@ function renderPortfolioPanel(row) {
     </div>`;
 
   els.drawerPortfolioFacts.innerHTML = [
-    fact("Entry price", fmt(p.entry_price, 2)),
-    fact("Size", fmt(p.size, 2)),
-    fact("Target", p.target_price != null ? fmt(p.target_price, 2) : "—"),
+    fact("Kurs bei Einstieg", fmt(p.entry_price, 2)),
+    fact("Stück", fmt(p.size, 2)),
+    fact("Zielkurs", p.target_price != null ? fmt(p.target_price, 2) : "—"),
     fact("Stop", p.stop_price != null ? fmt(p.stop_price, 2) : "—"),
     fact("Opened (UTC)", p.open_ts || "—"),
   ].join("");
@@ -628,12 +629,12 @@ function renderPortfolioPanel(row) {
       }
       const d = detail.distances || {};
       els.drawerPortfolioFacts.innerHTML = [
-        fact("Entry price", fmt(detail.position.entry_price, 2)),
-        fact("Size", fmt(detail.position.size, 2)),
-        fact("Target", d.target_price != null ? fmt(d.target_price, 2) : "—"),
+        fact("Kurs bei Einstieg", fmt(detail.position.entry_price, 2)),
+        fact("Stück", fmt(detail.position.size, 2)),
+        fact("Zielkurs", d.target_price != null ? fmt(d.target_price, 2) : "—"),
         fact("Stop", d.stop_price != null ? fmt(d.stop_price, 2) : "—"),
-        fact("Dist → target", d.dist_to_target_pct != null ? `${fmt(d.dist_to_target_pct, 1)}%` : "set mark price"),
-        fact("Dist → stop", d.dist_to_stop_pct != null ? `${fmt(d.dist_to_stop_pct, 1)}%` : "set mark price"),
+        fact("Dist → Zielkurs", d.dist_to_target_pct != null ? `${fmt(d.dist_to_target_pct, 1)}%` : "set mark price"),
+        fact("Dist → Stop", d.dist_to_stop_pct != null ? `${fmt(d.dist_to_stop_pct, 1)}%` : "set mark price"),
         fact("Conviction", detail.thesis ? detail.thesis.conviction : "—"),
         fact("Falsifier", detail.thesis ? escapeHtml(detail.thesis.falsifier) : "—"),
       ].join("");
@@ -1030,7 +1031,7 @@ function bind() {
       await apiSend("/api/diary", "POST", {
         ticker,
         comment: els.diaryComment.value,
-        kind: "observation",
+        kind: (els.diaryKind && els.diaryKind.value) || "observation",
         ...sourceBody(),
       });
       els.diaryComment.value = "";

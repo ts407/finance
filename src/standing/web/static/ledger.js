@@ -1,6 +1,6 @@
 /**
  * Shared helpers for Desk ↔ Portfolio ↔ Diary.
- * Personal ledger is local (artifacts/desk); never a scoring input.
+ * Personal ledger is local (STANDING_DATA_DIR/diary); never a scoring input.
  */
 
 export function todayISO() {
@@ -46,6 +46,15 @@ export function fmtPx(n) {
   if (n == null || Number.isNaN(Number(n))) return "—";
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+export const KIND_LABELS = {
+  observation: "Beobachtung",
+  note: "Notiz",
+  thesis_update: "These",
+  buy: "Kauf",
+  add: "Nachkauf",
+  close: "Verkauf",
+};
 
 export function fmtPnl(abs, pct) {
   if (abs == null || Number.isNaN(Number(abs))) return "—";
@@ -97,7 +106,7 @@ export function scoreFacts(snapshot) {
     ["V / Q / M", `${fmt(s.value)} / ${fmt(s.quality)} / ${fmt(s.momentum)}`],
     ["Composite", fmt(s.composite_standing)],
     ["Tilt", fmt(s.attention_tilt, 2)],
-    ["Kurs", fmtPx(s.last_price)],
+    ["Aktueller Kurs", fmtPx(s.last_price)],
     ["n / c", `${fmt(s.n, 0)} / ${fmt(s.confidence_c, 2)}`],
     ["Neg share", fmt(s.neg_share, 2)],
     ["Social", s.social_badge || "—"],
@@ -116,15 +125,29 @@ export function factsHtml(pairs) {
 export function diaryCard(entry) {
   const snap = entry.snapshot || {};
   const scores = snap.scores || {};
+  const marks = entry.marks || {};
+  const last = marks.last_price != null ? marks.last_price : scores.last_price;
+  const final = marks.final_standing != null ? marks.final_standing : scores.final_standing;
+  const pnl = marks.pnl_abs;
+  const kindLabel = KIND_LABELS[entry.kind] || entry.kind;
   return `<article class="note-card" data-ticker="${escapeHtml(entry.ticker)}">
     <header>
-      <strong>${escapeHtml(entry.ticker)}</strong>
-      <span class="badge ${escapeHtml(entry.kind)}">${escapeHtml(entry.kind)}</span>
+      <a class="ticker-link" href="/diary?ticker=${encodeURIComponent(entry.ticker)}" data-filter-ticker="${escapeHtml(entry.ticker)}">${escapeHtml(entry.ticker)}</a>
+      <span class="badge ${escapeHtml(entry.kind)}">${escapeHtml(kindLabel)}</span>
       <time>${escapeHtml((entry.created_utc || "").replace("T", " ").slice(0, 19))} UTC</time>
     </header>
     <p>${escapeHtml(entry.comment)}</p>
+    <dl class="mark-grid">
+      <div><dt>Aktueller Kurs</dt><dd>${escapeHtml(fmtPx(last))}</dd></div>
+      <div><dt>Kurs bei Einstieg</dt><dd>${escapeHtml(fmtPx(marks.entry_price))}</dd></div>
+      <div><dt>Zielkurs</dt><dd>${escapeHtml(fmtPx(marks.target_price))}</dd></div>
+      <div><dt>Stop</dt><dd>${escapeHtml(fmtPx(marks.stop_price))}</dd></div>
+      <div><dt>Stück</dt><dd>${escapeHtml(marks.shares == null ? "—" : fmt(marks.shares, 4))}</dd></div>
+      <div><dt>P&amp;L</dt><dd class="${pnlClass(pnl)}">${escapeHtml(fmtPnl(pnl, marks.pnl_pct))}</dd></div>
+      <div><dt>Final</dt><dd>${escapeHtml(fmt(final))}</dd></div>
+    </dl>
     <p class="note-meta">
-      Final ${fmt(scores.final_standing)} · Kurs ${fmtPx(scores.last_price)}
+      V ${escapeHtml(fmt(scores.value))} · Q ${escapeHtml(fmt(scores.quality))} · M ${escapeHtml(fmt(scores.momentum))}
       · ${escapeHtml(snap.methodology_version || "—")}
       · ${escapeHtml(snap.as_of || "—")}
     </p>

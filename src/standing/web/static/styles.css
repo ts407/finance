@@ -617,7 +617,7 @@ tr.is-held td.ticker { color: var(--accent); }
   gap: 0.55rem;
 }
 .ledger-form.compose {
-  grid-template-columns: 8rem 1fr auto;
+  grid-template-columns: 8rem 12rem minmax(12rem, 1fr) auto;
   align-items: end;
   width: 100%;
 }
@@ -632,7 +632,8 @@ tr.is-held td.ticker { color: var(--accent); }
   font-weight: 600;
 }
 .ledger-form input,
-.ledger-form textarea {
+.ledger-form textarea,
+.ledger-form select {
   font: inherit;
   text-transform: none;
   letter-spacing: 0;
@@ -650,8 +651,66 @@ a.ghost {
   font-weight: 600;
 }
 
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-width: 880px;
+  margin: 0.15rem 0 0.85rem;
+}
+.chip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 0.28rem 0.75rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--ink);
+}
+.chip span {
+  color: var(--muted);
+  font-weight: 500;
+}
+.chip.is-on {
+  background: rgba(31, 111, 91, 0.14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chip.is-on span { color: var(--accent); }
+
 .note-list { display: grid; gap: 0.75rem; }
-.note-list.wide { max-width: 720px; }
+.note-list.wide { max-width: 880px; }
+.day-group { display: grid; gap: 0.75rem; }
+.day-group + .day-group { margin-top: 1.35rem; }
+.day-group h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+.ticker-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.ticker-link:hover { color: var(--accent); }
+@media (max-width: 800px) {
+  .ledger-form.compose {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ledger-form.compose .grow,
+  .ledger-form.compose button {
+    grid-column: 1 / -1;
+  }
+}
 .note-card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -670,6 +729,23 @@ a.ghost {
   font-size: 0.82rem;
 }
 .note-card p { margin: 0.25rem 0; line-height: 1.45; }
+.mark-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin: 0.55rem 0 0.2rem;
+}
+.mark-grid dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.mark-grid dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
 .badge.buy, .badge.add { background: rgba(31, 111, 91, 0.16); }
 .badge.close { background: rgba(196, 92, 38, 0.16); color: var(--accent-2); }
 .badge.observation, .badge.note, .badge.thesis_update { background: rgba(18, 32, 27, 0.08); color: var(--muted); }

@@ -25,7 +25,7 @@
     <div class="brand-block">
       <p class="eyebrow">personal · append-only</p>
       <h1 class="brand">Tagebuch</h1>
-      <p class="tagline">Your notes with a frozen desk snapshot (scores, social pulse, config). Historical judgement — not a recommendation.</p>
+      <p class="tagline">Chronological journal with frozen desk scores plus Aktueller Kurs, Kurs bei Einstieg, Zielkurs, Stop, and P&amp;L. Historical judgement — not a recommendation.</p>
     </div>
   </header>
 
@@ -50,17 +50,35 @@
     </label>
     <label class="field"><span>As of (for new notes)</span><input type="date" id="as-of" /></label>
     <label class="field"><span>Ticker</span><input type="search" id="ticker" placeholder="AAPL" /></label>
+    <label class="field"><span>Art</span>
+      <select id="kind">
+        <option value="">Alle Arten</option>
+        <option value="observation">Beobachtung</option>
+        <option value="note">Notiz</option>
+        <option value="thesis_update">These</option>
+        <option value="buy">Kauf</option>
+        <option value="add">Nachkauf</option>
+        <option value="close">Verkauf</option>
+      </select>
+    </label>
     <label class="field grow"><span>Search</span><input type="search" id="q" placeholder="Freitext" /></label>
     <label class="field"><span>From</span><input type="date" id="since" /></label>
     <label class="field"><span>To</span><input type="date" id="until" /></label>
     <button type="button" class="ghost" id="reload">Filter</button>
     <a class="ghost" id="export-csv" href="/api/diary.csv">Export CSV</a>
-    <a class="ghost" href="/api/diary.json">Export JSON</a>
+    <a class="ghost" id="export-json" href="/api/diary.json">Export JSON</a>
   </section>
 
   <section class="controls">
     <form id="compose" class="ledger-form compose">
       <label>Ticker <input id="new-ticker" required maxlength="12" placeholder="MSFT" /></label>
+      <label>Art
+        <select id="new-kind">
+          <option value="observation">Beobachtung</option>
+          <option value="note">Notiz</option>
+          <option value="thesis_update">These-Update</option>
+        </select>
+      </label>
       <label class="grow">Kommentar
         <textarea id="new-comment" required maxlength="8000" placeholder="Einschätzung / Beobachtung"></textarea>
       </label>
@@ -68,7 +86,9 @@
     </form>
   </section>
 
-  <p class="disclaimer">Append-only. Each save captures Final / V / Q / M / tilt / social pulse / methodology_version at that UTC timestamp.</p>
+  <div class="chip-row" id="ticker-chips" aria-label="Tickers"></div>
+
+  <p class="disclaimer">Append-only. Each save captures Aktueller Kurs, Kurs bei Einstieg, Zielkurs, Stop, Stück, P&amp;L, and Final Standing at that UTC timestamp.</p>
   <p class="status-line" id="status-line"></p>
 
   <main class="workspace">

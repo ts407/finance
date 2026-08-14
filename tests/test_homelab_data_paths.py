@@ -36,6 +36,8 @@ def test_health_exposes_data_paths(tmp_path: Path, monkeypatch):
     assert body["portfolio_db_ok"] is True
     assert str(db) in body["portfolio_db"] or body["portfolio_db"].endswith("p.db")
     assert "root" in body
+    assert "data_root" in body
+    assert "diary_dir" in body
     assert "prefer_store" in body
     assert "default_market" in body
 

@@ -144,6 +144,8 @@ class HealthResponse(BaseModel):
     methodology_version: str
     placeholder: bool
     root: str | None = None
+    data_root: str | None = None
+    diary_dir: str | None = None
     portfolio_db: str | None = None
     portfolio_db_ok: bool | None = None
     portfolio_db_error: str | None = None
@@ -187,7 +189,7 @@ class ClientLogBatch(BaseModel):
 class DiaryCreate(BaseModel):
     ticker: str = Field(min_length=1, max_length=12)
     comment: str = Field(min_length=1, max_length=8000)
-    kind: Literal["observation", "note"] = "observation"
+    kind: Literal["observation", "note", "thesis_update"] = "observation"
     as_of: str | None = None
     history_days: int = Field(default=14, ge=7, le=60)
     social: str | None = None
@@ -515,17 +517,35 @@ def _portfolio_repo():
     try:
         from standing.portfolio.cli_support import open_repository
 
-        return open_repository(os.environ.get("STANDING_PORTFOLIO_DB"))
+        return open_repository(os.environ.get("STANDING_PORTFOLIO_DB") or None)
     except Exception as exc:
         log.warning("portfolio DB unavailable: %s", exc)
         return None
 
 
-def _portfolio_status() -> dict[str, Any]:
-    from standing.portfolio.db import DEFAULT_DB_PATH
+def _book_overlay_for(ticker: str) -> dict[str, Any] | None:
+    """SQLite book overlay (entry / target / stop / size) when the ticker is held."""
+    repo = _portfolio_repo()
+    if repo is None:
+        return None
+    try:
+        from standing.portfolio.overlay import position_overlay
 
-    path = Path(os.environ.get("STANDING_PORTFOLIO_DB") or DEFAULT_DB_PATH)
+        return position_overlay(repo, ticker)
+    except Exception as exc:
+        log.warning("portfolio overlay unavailable ticker=%s: %s", ticker, exc)
+        return None
+    finally:
+        repo.conn.close()
+
+
+def _portfolio_status() -> dict[str, Any]:
+    from standing.config import default_desk_dir, default_portfolio_db, resolve_data_root
+
+    path = default_portfolio_db()
     out: dict[str, Any] = {
+        "data_root": str(resolve_data_root()),
+        "diary_dir": str(default_desk_dir()),
         "portfolio_db": str(path),
         "portfolio_db_ok": False,
         "portfolio_db_error": None,
@@ -626,7 +646,6 @@ def create_app() -> FastAPI:
     def health() -> dict[str, Any]:
         from standing.config import ROOT
         from standing.pipeline.store import DEFAULT_SNAPSHOT_ROOT, list_snapshot_days
-        from standing.portfolio.db import DEFAULT_DB_PATH
 
         cfg = load_scoring_config()
         days = list_snapshot_days()
@@ -637,7 +656,9 @@ def create_app() -> FastAPI:
             "methodology_version": cfg.methodology_version,
             "placeholder": cfg.placeholder,
             "root": str(ROOT),
-            "portfolio_db": port["portfolio_db"] or str(DEFAULT_DB_PATH),
+            "data_root": port["data_root"],
+            "diary_dir": port["diary_dir"],
+            "portfolio_db": port["portfolio_db"],
             "portfolio_db_ok": port["portfolio_db_ok"],
             "portfolio_db_error": port["portfolio_db_error"],
             "open_positions": port["open_positions"],
@@ -962,6 +983,7 @@ def create_app() -> FastAPI:
                 snapshot=snap,
                 opened_at=body.opened_at,
                 comment=body.comment,
+                book=_book_overlay_for(body.ticker),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -995,6 +1017,7 @@ def create_app() -> FastAPI:
                 thesis=body.thesis,
                 snapshot=snap,
                 comment=body.comment,
+                book=_book_overlay_for(str(pos["ticker"])),
             )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1024,6 +1047,7 @@ def create_app() -> FastAPI:
                 close_price=close_px,
                 snapshot=snap,
                 comment=body.comment,
+                book=_book_overlay_for(str(pos["ticker"])),
             )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1038,10 +1062,14 @@ def create_app() -> FastAPI:
         until: str | None = Query(default=None),
         kind: str | None = Query(default=None),
     ) -> dict[str, Any]:
-        from standing.desk.ledger import read_diary, summarize_diary_for_vergleich
+        from standing.desk.ledger import read_diary, summarize_diary_for_vergleich, summarize_entries
 
         entries = read_diary(ticker=ticker, q=q, since=since, until=until, kind=kind)
-        return {"entries": entries, "summary": summarize_diary_for_vergleich()}
+        return {
+            "entries": entries,
+            "summary": summarize_entries(entries),
+            "corpus": summarize_diary_for_vergleich(),
+        }
 
     @app.post("/api/diary")
     def diary_create(body: DiaryCreate) -> dict[str, Any]:
@@ -1063,6 +1091,8 @@ def create_app() -> FastAPI:
                 snapshot=snap,
                 kind=body.kind,
                 position_id=held["id"] if held else None,
+                desk_position=held,
+                book=_book_overlay_for(body.ticker),
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1070,10 +1100,16 @@ def create_app() -> FastAPI:
         return {"entry": entry}
 
     @app.get("/api/diary.csv")
-    def diary_csv() -> StreamingResponse:
+    def diary_csv(
+        ticker: str | None = Query(default=None),
+        q: str | None = Query(default=None),
+        since: str | None = Query(default=None),
+        until: str | None = Query(default=None),
+        kind: str | None = Query(default=None),
+    ) -> StreamingResponse:
         from standing.desk.ledger import export_diary_csv
 
-        text = export_diary_csv()
+        text = export_diary_csv(ticker=ticker, q=q, since=since, until=until, kind=kind)
         return StreamingResponse(
             iter([text]),
             media_type="text/csv",
@@ -1081,10 +1117,18 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/diary.json")
-    def diary_json() -> JSONResponse:
+    def diary_json(
+        ticker: str | None = Query(default=None),
+        q: str | None = Query(default=None),
+        since: str | None = Query(default=None),
+        until: str | None = Query(default=None),
+        kind: str | None = Query(default=None),
+    ) -> JSONResponse:
         from standing.desk.ledger import read_diary
 
-        return JSONResponse({"entries": read_diary()})
+        return JSONResponse(
+            {"entries": read_diary(ticker=ticker, q=q, since=since, until=until, kind=kind)}
+        )
 
     from standing.web.portfolio_api import router as portfolio_router
 

@@ -6,9 +6,10 @@ import sqlite3
 from importlib import resources
 from pathlib import Path
 
-from standing.config import ROOT
+from standing.config import default_portfolio_db
 
-DEFAULT_DB_PATH = ROOT / "artifacts" / "portfolio" / "standing.db"
+# Runtime default lives outside the git checkout (see default_portfolio_db).
+DEFAULT_DB_PATH = default_portfolio_db
 
 # Ordered migration versions → SQL resource names under standing.portfolio.migrations
 MIGRATIONS: list[tuple[int, str]] = [
@@ -19,7 +20,7 @@ MIGRATIONS: list[tuple[int, str]] = [
 
 def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
     """Open a SQLite connection with foreign keys enabled."""
-    path = Path(db_path) if db_path is not None else DEFAULT_DB_PATH
+    path = Path(db_path).expanduser() if db_path else default_portfolio_db()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row

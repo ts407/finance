@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from standing.desk.ledger import (
     append_diary,
+    build_diary_marks,
     capture_snapshot,
     close_position,
     export_diary_csv,
@@ -119,6 +122,9 @@ def test_open_add_pnl_and_append_only_diary(tmp_path):
 
     summary = summarize_diary_for_vergleich(root=root)
     assert summary["n_entries"] == 4
+    assert summary["ticker_counts"]["AAPL"] == 4
+    assert summary["kinds"]["buy"] == 1
+    assert summary["kinds"]["close"] == 1
     assert summary["score_input"] is False
 
 
@@ -144,3 +150,78 @@ def test_diary_filter_and_search(tmp_path):
     assert len(msft) == 1
     empty = read_diary(since="2099-01-01", root=root)
     assert empty == []
+    notes = read_diary(kind="note", root=root)
+    assert [r["ticker"] for r in notes] == ["NVDA"]
+    csv_msft = export_diary_csv(ticker="MSFT", root=root)
+    assert "MSFT" in csv_msft
+    assert "NVDA" not in csv_msft
+
+
+def test_diary_marks_desk_then_book_overlay(tmp_path):
+    root = tmp_path / "desk"
+    opened = open_or_add_position(
+        ticker="AAPL",
+        shares=10,
+        avg_cost=100,
+        buy_reason="Peer-relative value vs quality looked coherent.",
+        thesis="Hold while composite stays above sector median.",
+        snapshot=_snap("AAPL", 100, 62),
+        opened_at="2026-07-22",
+        root=root,
+    )
+    buy_marks = opened["diary_entry"]["marks"]
+    assert buy_marks["last_price"] == 100
+    assert buy_marks["entry_price"] == 100
+    assert buy_marks["shares"] == 10
+    assert buy_marks["target_price"] is None
+    assert buy_marks["final_standing"] == 62
+
+    book = {
+        "held": True,
+        "entry_price": 95.0,
+        "target_price": 140.0,
+        "stop_price": 80.0,
+        "size": 12.0,
+    }
+    note = append_diary(
+        ticker="AAPL",
+        comment="Zielkurs vs mark — no action.",
+        snapshot=_snap("AAPL", 130, 70),
+        kind="observation",
+        desk_position=opened["position"],
+        book=book,
+        root=root,
+    )
+    marks = note["marks"]
+    assert marks["last_price"] == 130
+    assert marks["entry_price"] == 95
+    assert marks["target_price"] == 140
+    assert marks["stop_price"] == 80
+    assert marks["shares"] == 12
+    assert marks["final_standing"] == 70
+    assert marks["pnl_abs"] == 300
+    assert marks["pnl_pct"] == pytest.approx(300 / 1000)
+
+    nested = build_diary_marks(
+        snapshot=_snap("MSFT", 400, 58),
+        book={
+            "portfolio": {
+                "entry_price": 350,
+                "target_price": 480,
+                "stop_price": 300,
+                "size": 5,
+            },
+            "thesis": {"target_price": 480, "stop_price": 300},
+        },
+    )
+    assert nested["last_price"] == 400
+    assert nested["entry_price"] == 350
+    assert nested["target_price"] == 480
+    assert nested["stop_price"] == 300
+    assert nested["shares"] == 5
+    assert nested["pnl_abs"] == 250
+
+    csv_text = export_diary_csv(root=root)
+    assert "entry_price" in csv_text and "target_price" in csv_text
+    assert "140" in csv_text
+

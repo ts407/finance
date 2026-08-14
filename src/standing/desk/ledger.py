@@ -11,10 +11,9 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from standing.config import ROOT
+from standing.config import default_desk_dir
 
 DESK_DIR_ENV = "STANDING_DESK_DIR"
-DEFAULT_DESK_DIR = ROOT / "artifacts" / "desk"
 
 SNAPSHOT_SCORE_FIELDS = (
     "ticker",
@@ -45,8 +44,7 @@ DIARY_KINDS = frozenset(
 def desk_dir(path: Path | None = None) -> Path:
     if path is not None:
         return path
-    raw = os.environ.get(DESK_DIR_ENV, "").strip()
-    return Path(raw) if raw else DEFAULT_DESK_DIR
+    return default_desk_dir()
 
 
 def _positions_path(root: Path) -> Path:
@@ -155,6 +153,60 @@ def get_position(position_id: str, *, root: Path | None = None) -> dict[str, Any
     return None
 
 
+def build_diary_marks(
+    *,
+    snapshot: dict[str, Any] | None = None,
+    desk_position: dict[str, Any] | None = None,
+    book: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Price context frozen onto a diary entry.
+
+    Prefer SQLite book overlay (entry / target / stop / size) when held;
+    fall back to the desk holdings log (avg_cost, purchase snapshot, P&L).
+    """
+    snap = snapshot or {}
+    scores = snap.get("scores") if isinstance(snap.get("scores"), dict) else {}
+    last_price = _finite(scores.get("last_price"))
+    purchase = (desk_position or {}).get("purchase_snapshot") or {}
+    purchase_scores = purchase.get("scores") if isinstance(purchase.get("scores"), dict) else {}
+    desk_entry = _finite((desk_position or {}).get("avg_cost")) or _finite(
+        purchase_scores.get("last_price")
+    )
+    overlay = book or {}
+    if overlay.get("portfolio") and isinstance(overlay["portfolio"], dict):
+        overlay = overlay["portfolio"]
+    thesis = (book or {}).get("thesis") if isinstance(book, dict) else None
+    if not isinstance(thesis, dict):
+        thesis = {}
+    entry_price = (
+        _finite(overlay.get("entry_price"))
+        or _finite((book or {}).get("entry_price") if isinstance(book, dict) else None)
+        or desk_entry
+    )
+    target_price = _finite(overlay.get("target_price")) or _finite(thesis.get("target_price"))
+    stop_price = _finite(overlay.get("stop_price")) or _finite(thesis.get("stop_price"))
+    shares = _finite(overlay.get("size")) or _finite((desk_position or {}).get("shares"))
+    avg_cost = _finite((desk_position or {}).get("avg_cost")) or entry_price
+    if desk_position:
+        pnl = _pnl_block(desk_position, last_price)
+    elif shares is not None and avg_cost is not None:
+        pnl = _pnl_block({"shares": shares, "avg_cost": avg_cost}, last_price)
+    else:
+        pnl = None
+    return {
+        "last_price": last_price,
+        "entry_price": entry_price,
+        "avg_cost": avg_cost,
+        "target_price": target_price,
+        "stop_price": stop_price,
+        "shares": shares,
+        "pnl_abs": None if pnl is None else pnl.get("pnl_abs"),
+        "pnl_pct": None if pnl is None else pnl.get("pnl_pct"),
+        "final_standing": _finite(scores.get("final_standing")),
+    }
+
+
 def append_diary(
     *,
     ticker: str,
@@ -162,6 +214,9 @@ def append_diary(
     snapshot: dict[str, Any],
     kind: str = "observation",
     position_id: str | None = None,
+    desk_position: dict[str, Any] | None = None,
+    book: dict[str, Any] | None = None,
+    marks: dict[str, Any] | None = None,
     root: Path | None = None,
 ) -> dict[str, Any]:
     if kind not in DIARY_KINDS:
@@ -172,6 +227,11 @@ def append_diary(
     text = (comment or "").strip()
     if not text:
         raise ValueError("comment is required")
+    frozen = marks if marks is not None else build_diary_marks(
+        snapshot=snapshot,
+        desk_position=desk_position,
+        book=book,
+    )
     entry = {
         "id": _new_id("D"),
         "created_utc": _now_utc(),
@@ -180,6 +240,7 @@ def append_diary(
         "comment": text,
         "position_id": position_id,
         "snapshot": snapshot,
+        "marks": frozen,
     }
     target = ensure_desk(root)
     with _diary_path(target).open("a", encoding="utf-8") as f:
@@ -270,6 +331,7 @@ def open_or_add_position(
     snapshot: dict[str, Any],
     opened_at: str | None = None,
     comment: str | None = None,
+    book: dict[str, Any] | None = None,
     root: Path | None = None,
 ) -> dict[str, Any]:
     if shares <= 0 or avg_cost < 0:
@@ -337,6 +399,8 @@ def open_or_add_position(
         snapshot=snapshot,
         kind=kind,
         position_id=position["id"],
+        desk_position=position,
+        book=book,
         root=root,
     )
     return {"position": position, "diary_entry": entry}
@@ -349,6 +413,7 @@ def update_position_notes(
     thesis: str | None = None,
     snapshot: dict[str, Any] | None = None,
     comment: str | None = None,
+    book: dict[str, Any] | None = None,
     root: Path | None = None,
 ) -> dict[str, Any]:
     positions = load_positions(root=root)
@@ -381,6 +446,8 @@ def update_position_notes(
         snapshot=snapshot or position.get("purchase_snapshot") or {},
         kind="thesis_update",
         position_id=position_id,
+        desk_position=position,
+        book=book,
         root=root,
     )
     return {"position": position, "diary_entry": entry}
@@ -392,6 +459,7 @@ def close_position(
     close_price: float | None,
     snapshot: dict[str, Any],
     comment: str | None = None,
+    book: dict[str, Any] | None = None,
     root: Path | None = None,
 ) -> dict[str, Any]:
     positions = load_positions(root=root)
@@ -414,6 +482,8 @@ def close_position(
         snapshot=snapshot,
         kind="close",
         position_id=position_id,
+        desk_position=position,
+        book=book,
         root=root,
     )
     return {"position": position, "diary_entry": entry}
@@ -490,8 +560,16 @@ def ticker_dossier(
     }
 
 
-def export_diary_csv(*, root: Path | None = None) -> str:
-    rows = read_diary(root=root)
+def export_diary_csv(
+    *,
+    ticker: str | None = None,
+    q: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    kind: str | None = None,
+    root: Path | None = None,
+) -> str:
+    rows = read_diary(ticker=ticker, q=q, since=since, until=until, kind=kind, root=root)
     buf = io.StringIO()
     fields = [
         "id",
@@ -504,12 +582,19 @@ def export_diary_csv(*, root: Path | None = None) -> str:
         "methodology_version",
         "final_standing",
         "last_price",
+        "entry_price",
+        "target_price",
+        "stop_price",
+        "shares",
+        "pnl_abs",
+        "pnl_pct",
     ]
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
     for row in reversed(rows):  # chronological for export
         snap = row.get("snapshot") or {}
         scores = snap.get("scores") or {}
+        marks = row.get("marks") or {}
         writer.writerow(
             {
                 "id": row.get("id"),
@@ -520,27 +605,42 @@ def export_diary_csv(*, root: Path | None = None) -> str:
                 "position_id": row.get("position_id"),
                 "as_of": snap.get("as_of"),
                 "methodology_version": snap.get("methodology_version"),
-                "final_standing": scores.get("final_standing"),
-                "last_price": scores.get("last_price"),
+                "final_standing": marks.get("final_standing", scores.get("final_standing")),
+                "last_price": marks.get("last_price", scores.get("last_price")),
+                "entry_price": marks.get("entry_price"),
+                "target_price": marks.get("target_price"),
+                "stop_price": marks.get("stop_price"),
+                "shares": marks.get("shares"),
+                "pnl_abs": marks.get("pnl_abs"),
+                "pnl_pct": marks.get("pnl_pct"),
             }
         )
     return buf.getvalue()
 
 
-def summarize_diary_for_vergleich(*, root: Path | None = None) -> dict[str, Any]:
+def summarize_entries(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Qualitative counts only — never a score or training input."""
-    rows = read_diary(root=root)
     tickers = sorted({str(r.get("ticker")) for r in rows if r.get("ticker")})
     kinds: dict[str, int] = {}
+    ticker_counts: dict[str, int] = {}
     for row in rows:
         k = str(row.get("kind") or "note")
         kinds[k] = kinds.get(k, 0) + 1
+        ticker = str(row.get("ticker") or "").upper()
+        if ticker:
+            ticker_counts[ticker] = ticker_counts.get(ticker, 0) + 1
     latest = rows[0]["created_utc"] if rows else None
     return {
         "n_entries": len(rows),
         "n_tickers": len(tickers),
-        "tickers": tickers[:20],
+        "tickers": tickers,
+        "ticker_counts": ticker_counts,
         "kinds": kinds,
         "latest_utc": latest,
         "score_input": False,
     }
+
+
+def summarize_diary_for_vergleich(*, root: Path | None = None) -> dict[str, Any]:
+    """Qualitative counts only — never a score or training input."""
+    return summarize_entries(read_diary(root=root))

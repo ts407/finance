@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,48 @@ def resolve_root() -> Path:
 ROOT = resolve_root()
 DEFAULT_SCORING_PATH = ROOT / "config" / "scoring.yaml"
 DEFAULT_RULES_PATH = ROOT / "config" / "rules.json"
+
+
+def _env_path(name: str) -> Path | None:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser().resolve()
+
+
+def resolve_data_root() -> Path:
+    """
+    Personal data root — outside the git checkout.
+
+    Canonical home is the homelab tank (``STANDING_DATA_DIR=/tank/finance/data``).
+    Fallback when unset: macOS Application Support / Linux XDG, so tests and
+    accidental local runs never write into the repo.
+    """
+    override = _env_path("STANDING_DATA_DIR")
+    if override is not None:
+        return override
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Standing"
+    xdg = (os.environ.get("XDG_DATA_HOME") or "").strip()
+    if xdg:
+        return Path(xdg).expanduser().resolve() / "standing"
+    return Path.home() / ".local" / "share" / "standing"
+
+
+def default_portfolio_db() -> Path:
+    """SQLite book of record. Override with ``STANDING_PORTFOLIO_DB``."""
+    override = _env_path("STANDING_PORTFOLIO_DB")
+    if override is not None:
+        return override
+    return resolve_data_root() / "portfolio" / "standing.db"
+
+
+def default_desk_dir() -> Path:
+    """Holdings log + append-only diary. Override with ``STANDING_DESK_DIR``."""
+    override = _env_path("STANDING_DESK_DIR")
+    if override is not None:
+        return override
+    return resolve_data_root() / "diary"
 
 
 def set_dotted(raw: dict[str, Any], dotted: str, value: Any) -> None:

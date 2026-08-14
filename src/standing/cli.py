@@ -672,7 +672,7 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument(
         "--db",
         default=None,
-        help="Portfolio SQLite path for scanner_snapshot sync (default: artifacts/portfolio/standing.db)",
+        help="Portfolio SQLite path for scanner_snapshot sync (default: $STANDING_DATA_DIR/portfolio/standing.db)",
     )
     ing.set_defaults(func=cmd_ingest)
 

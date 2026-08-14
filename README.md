@@ -136,7 +136,7 @@ src/standing/optimization    # shadow / vergleich optimization loop
 - Parameters are synthetic (`placeholder: true`) until an empirical freeze.
 - Track S is unlocked: the sentiment axis and Social levers flow through the optimization loop (`standing loop-analyse --track S`), but sentiment is not yet calibrated (`sentiment_calibrated: false`) and promotion stays blocked while `placeholder: true`.
 - Reddit/StockTwits remain fixture-only; Wikipedia + Bluesky are the open attention path.
-- Holdings / diary are a personal local ledger (`artifacts/desk/`, gitignored). Vergleich may cite diary counts as a qualitative note only — never as score or training input.
+- Holdings / diary and the SQLite book live on the **homelab tank**, outside git: `/tank/finance/data/diary` and `/tank/finance/data/portfolio/standing.db`. Vergleich may cite diary counts as a qualitative note only — never as score or training input.
 - Not investment advice.
 
 ---

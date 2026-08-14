@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from standing.web.app import create_app
@@ -178,14 +179,37 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
         json={"ticker": ticker, "comment": "Beobachtung: tilt still bounded.", **params},
     )
     assert note.status_code == 200
+    note_body = note.json()["entry"]
+    marks = note_body["marks"]
+    assert marks["last_price"] is not None
+    assert marks["entry_price"] == pytest.approx(price * 0.9)
+    assert marks["shares"] == 5
+    assert marks["final_standing"] is not None
     diary = client.get("/api/diary", params={"ticker": ticker}).json()
     assert diary["summary"]["score_input"] is False
     assert diary["summary"]["n_entries"] >= 2
+    assert diary["summary"]["n_tickers"] == 1
+    assert diary["corpus"]["n_entries"] >= diary["summary"]["n_entries"]
+    assert ticker in diary["corpus"]["ticker_counts"]
     assert any("Beobachtung" in e["comment"] for e in diary["entries"])
+    assert any(e.get("marks", {}).get("entry_price") is not None for e in diary["entries"])
+
+    thesis = client.post(
+        "/api/diary",
+        json={"ticker": ticker, "comment": "These hält — no action.", "kind": "thesis_update", **params},
+    )
+    assert thesis.status_code == 200
+    assert thesis.json()["entry"]["kind"] == "thesis_update"
 
     csv = client.get("/api/diary.csv")
     assert csv.status_code == 200
     assert ticker in csv.text
+    assert "target_price" in csv.text
+    assert "entry_price" in csv.text
+    csv_one = client.get("/api/diary.csv", params={"ticker": ticker, "kind": "thesis_update"})
+    assert csv_one.status_code == 200
+    assert ticker in csv_one.text
+    assert "These hält" in csv_one.text
 
     closed = client.post(
         f"/api/holdings/{position_id}/close",
@@ -200,3 +224,9 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
     diary_page = client.get("/diary")
     assert diary_page.status_code == 200
     assert b"Tagebuch" in diary_page.content
+    assert b"Aktueller Kurs" in diary_page.content
+    assert b"Kurs bei Einstieg" in diary_page.content
+    assert b"Zielkurs" in diary_page.content
+    assert b"Alle Arten" in diary_page.content
+    assert b'id="new-kind"' in diary_page.content
+    assert b'id="ticker-chips"' in diary_page.content
