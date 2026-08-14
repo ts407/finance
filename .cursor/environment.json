@@ -1,0 +1,12 @@
+{
+  "name": "Standing (V/Q/M equity desk)",
+  "user": "ubuntu",
+  "install": "sudo apt-get update && sudo apt-get install -y --no-install-recommends python3.12-venv && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -e \".[dev,web]\"",
+  "terminals": [
+    {
+      "name": "standing-web",
+      "command": ".venv/bin/standing serve --host 127.0.0.1 --port 8000 --log-level info"
+    }
+  ],
+  "ports": [8000]
+}
