@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Standing — trade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <nav class="topnav" aria-label="Primary">
+    <a href="/" class="nav-brand">Standing</a>
+    <div class="nav-links">
+      <a href="/">Desk</a>
+      <a href="/portfolio">Portfolio</a>
+      <a href="/trade" aria-current="page">Trade</a>
+      <a href="/diary">Diary</a>
+      <a href="/methodology">Methodology</a>
+    </div>
+  </nav>
+
+  <header class="masthead">
+    <div class="brand-block">
+      <p class="eyebrow">personal · book of record</p>
+      <h1 class="brand">Trade</h1>
+      <p class="tagline">Kauf und Verkauf with Aktueller Kurs, Zielkurs, Upside Potential, Stop, and Chance/Risiko. Personal log — not a broker, not advice.</p>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="Source">
+    <label class="field"><span>Market</span>
+      <select id="market">
+        <option value="live">Live (EDGAR/Finnhub)</option>
+        <option value="edgar">SEC EDGAR</option>
+        <option value="stooq">Stooq/Yahoo OHLCV</option>
+        <option value="finnhub">Finnhub (+ key)</option>
+        <option value="fixture">Fixture</option>
+      </select>
+    </label>
+    <label class="field"><span>Attention</span>
+      <select id="social">
+        <option value="open">Wiki + Bluesky</option>
+        <option value="wikipedia">Wikipedia</option>
+        <option value="bluesky">Bluesky</option>
+        <option value="fixture">Fixture</option>
+        <option value="all">All</option>
+      </select>
+    </label>
+    <label class="field"><span>As of</span><input type="date" id="as-of" /></label>
+    <div class="view-toggle" role="tablist" aria-label="Side">
+      <button type="button" class="tab active" id="tab-buy" data-side="buy" role="tab" aria-selected="true">Kauf</button>
+      <button type="button" class="tab" id="tab-sell" data-side="sell" role="tab" aria-selected="false">Verkauf</button>
+    </div>
+  </section>
+
+  <p class="disclaimer">Not a broker. A Kauf writes the SQLite book plus an append-only Tagebuch note. Historical judgement only.</p>
+  <p class="status-line" id="status-line" role="status"></p>
+
+  <main class="workspace split trade-layout">
+    <section class="board">
+      <div class="board-head">
+        <h2 id="form-title">Kauf</h2>
+        <p id="form-lead">Open a position: Aktueller Kurs, Stück, Einstieg, Zielkurs, Upside Potential, Stop.</p>
+      </div>
+
+      <dl class="mark-grid trade-geo" id="geo"></dl>
+
+      <form id="buy-form" class="ledger-form trade-form">
+        <label>Ticker <input id="buy-ticker" required maxlength="12" placeholder="MSFT" autocomplete="off" /></label>
+        <label>Stück <input id="buy-size" type="number" min="0" step="any" value="1" required /></label>
+        <label>Kurs bei Einstieg <input id="buy-price" type="number" min="0" step="any" required /></label>
+        <label>Aktueller Kurs <input id="buy-last" type="text" readonly /></label>
+        <label>Zielkurs <input id="buy-target" type="number" min="0" step="any" required /></label>
+        <label>Stop <input id="buy-stop" type="number" min="0" step="any" required /></label>
+        <label>Horizont <input id="buy-horizon" value="90d" required /></label>
+        <label>Conviction 1–5 <input id="buy-conviction" type="number" min="1" max="5" value="3" required /></label>
+        <label class="span-2">Grund des Kaufens
+          <textarea id="buy-reason" required maxlength="4000" placeholder="Warum jetzt — keine Handlungsempfehlung."></textarea>
+        </label>
+        <label class="span-2">These
+          <textarea id="buy-thesis" required maxlength="8000" placeholder="Was sich bewahrheiten muss."></textarea>
+        </label>
+        <label class="span-2">Mechanismus
+          <textarea id="buy-mechanism" required maxlength="4000" placeholder="Wie der Kurs dorthin kommt."></textarea>
+        </label>
+        <label class="span-2">Falsifizierer (≥20 Zeichen)
+          <textarea id="buy-falsifier" required minlength="20" maxlength="4000" placeholder="Was die These bricht."></textarea>
+        </label>
+        <button type="submit" class="primary span-2">Kauf buchen</button>
+      </form>
+
+      <form id="sell-form" class="ledger-form trade-form hidden">
+        <label>Ticker
+          <select id="sell-ticker" required>
+            <option value="">Open position…</option>
+          </select>
+        </label>
+        <label>Aktueller Kurs <input id="sell-last" type="text" readonly /></label>
+        <label>Kurs bei Einstieg <input id="sell-entry" type="text" readonly /></label>
+        <label>Verkaufskurs <input id="sell-price" type="number" min="0" step="any" required /></label>
+        <label>Zielkurs <input id="sell-target" type="text" readonly /></label>
+        <label>Stop <input id="sell-stop" type="text" readonly /></label>
+        <label>Grund
+          <select id="sell-reason" required>
+            <option value="target">Zielkurs</option>
+            <option value="stop">Stop</option>
+            <option value="thesis_broken">These gebrochen</option>
+            <option value="rebalance">Rebalance</option>
+            <option value="manual">Manuell</option>
+          </select>
+        </label>
+        <label class="span-2">Exit-Notiz
+          <textarea id="sell-note" required maxlength="8000" placeholder="Warum schließen — append-only."></textarea>
+        </label>
+        <button type="submit" class="primary span-2">Verkauf buchen</button>
+      </form>
+    </section>
+
+    <section class="board">
+      <div class="board-head">
+        <h2>Open book</h2>
+        <p>SQLite positions on the tank. Click a row to sell.</p>
+      </div>
+      <dl class="facts quote-card" id="quote"></dl>
+      <div class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th>Ticker</th>
+              <th class="num">Einstieg</th>
+              <th class="num">Aktuell</th>
+              <th class="num">Zielkurs</th>
+              <th class="num">Upside</th>
+              <th class="num">→Stop</th>
+              <th class="num">P&amp;L%</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="book-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>qualitative loop reference only · never a score input</span>
+    <a href="/diary">Tagebuch</a>
+    <a href="/portfolio">Portfolio</a>
+  </footer>
+  <script src="/static/trade.js" type="module"></script>
+</body>
+</html>

@@ -49,6 +49,7 @@ def test_web_health_and_snapshot():
     assert b'id="foot-staleness"' in index.content
     assert b"/static/app.js" in index.content
     assert b'href="/portfolio"' in index.content
+    assert b'href="/trade"' in index.content
     assert b'href="/diary"' in index.content
     assert b"Grund des Kaufens" in index.content
 
@@ -230,3 +231,15 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
     assert b"Alle Arten" in diary_page.content
     assert b'id="new-kind"' in diary_page.content
     assert b'id="ticker-chips"' in diary_page.content
+    assert b'href="/trade"' in diary_page.content
+
+    trade_page = client.get("/trade")
+    assert trade_page.status_code == 200
+    assert b"Kauf" in trade_page.content
+    assert b"Verkauf" in trade_page.content
+    assert b"Falsifizierer" in trade_page.content
+    assert b"Upside Potential" in trade_page.content
+    assert b"Aktueller Kurs" in trade_page.content
+    assert b'id="geo"' in trade_page.content
+    assert b'id="buy-form"' in trade_page.content
+    assert b'id="sell-form"' in trade_page.content

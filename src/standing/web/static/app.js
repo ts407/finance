@@ -399,7 +399,7 @@ async function loadBook() {
       api("/api/portfolio/journal?limit=40"),
     ]);
     if (!book.positions.length) {
-      els.bookBody.innerHTML = `<tr class="state-row"><td colspan="10">No open positions yet. On Standing, open a ticker → <strong>Open position</strong>. Book stays empty until you buy.</td></tr>`;
+      els.bookBody.innerHTML = `<tr class="state-row"><td colspan="10">No open positions yet. Use <a href="/trade">Trade → Kauf</a> or open a ticker on Standing.</td></tr>`;
     } else {
       els.bookBody.innerHTML = book.positions.map((p) => {
         const bucket = p.drift_bucket || "n/a";
@@ -416,7 +416,7 @@ async function loadBook() {
           <td class="num drift drift-${bucketClass}">${driftTxt}</td>
           <td class="num">${p.dist_to_target_pct != null ? `${fmt(p.dist_to_target_pct, 1)}%` : "—"}</td>
           <td class="num">${p.dist_to_stop_pct != null ? `${fmt(p.dist_to_stop_pct, 1)}%` : "—"}</td>
-          <td><button type="button" class="ghost tiny" data-sell="${p.ticker}">Sell</button></td>
+          <td><a class="ghost tiny" href="/trade?side=sell&ticker=${encodeURIComponent(p.ticker)}">Verkauf</a></td>
         </tr>`;
       }).join("");
     }
@@ -530,10 +530,11 @@ function openDrawer(ticker) {
   els.drawerFlags.innerHTML = flags.join(" ");
 
   const held = row.portfolio && row.portfolio.held;
+  const t = encodeURIComponent(row.ticker);
   els.drawerActions.innerHTML = held
-    ? `<button type="button" class="primary" data-action="sell">Sell / close</button>
+    ? `<a class="primary" href="/trade?side=sell&ticker=${t}">Verkauf</a>
        <button type="button" class="ghost" data-action="journal">Journal note</button>`
-    : `<button type="button" class="primary" data-action="buy">Open position</button>
+    : `<a class="primary" href="/trade?side=buy&ticker=${t}">Kauf</a>
        <button type="button" class="ghost" data-action="watchlist">Watchlist</button>
        <button type="button" class="ghost" data-action="journal">Journal note</button>`;
 
@@ -1044,7 +1045,6 @@ function bind() {
   els.modalClose.addEventListener("click", closeModal);
   els.modalScrim.addEventListener("click", closeModal);
   els.modalForm.addEventListener("submit", submitModal);
-  els.btnBuy.addEventListener("click", () => openModal("buy", ""));
   els.btnWatchlist.addEventListener("click", () => openModal("watchlist", ""));
   els.btnJournal.addEventListener("click", () => openModal("journal", ""));
   els.btnRefreshBook.addEventListener("click", () => loadBook());

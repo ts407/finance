@@ -201,6 +201,10 @@ def test_diary_marks_desk_then_book_overlay(tmp_path):
     assert marks["final_standing"] == 70
     assert marks["pnl_abs"] == 300
     assert marks["pnl_pct"] == pytest.approx(300 / 1000)
+    assert marks["upside_pct"] == pytest.approx(140 / 130 - 1)
+    assert marks["upside_from_entry_pct"] == pytest.approx(140 / 95 - 1)
+    assert marks["downside_pct"] == pytest.approx(80 / 130 - 1)
+    assert marks["reward_risk"] == pytest.approx((140 - 95) / (95 - 80))
 
     nested = build_diary_marks(
         snapshot=_snap("MSFT", 400, 58),
@@ -220,6 +224,8 @@ def test_diary_marks_desk_then_book_overlay(tmp_path):
     assert nested["stop_price"] == 300
     assert nested["shares"] == 5
     assert nested["pnl_abs"] == 250
+    assert nested["upside_pct"] == pytest.approx(480 / 400 - 1)
+    assert nested["reward_risk"] == pytest.approx((480 - 350) / (350 - 300))
 
     csv_text = export_diary_csv(root=root)
     assert "entry_price" in csv_text and "target_price" in csv_text

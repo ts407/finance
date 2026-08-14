@@ -768,6 +768,26 @@ a.ghost {
 .dossier-body p { line-height: 1.45; }
 .hidden { display: none; }
 
+.quote-card {
+  margin: 0 0 1rem;
+}
+.trade-geo {
+  margin: 0 0 1rem;
+}
+.trade-form {
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+.trade-form .span-2,
+.trade-form button {
+  grid-column: 1 / -1;
+}
+.trade-form textarea { min-height: 4.2rem; }
+@media (max-width: 800px) {
+  .trade-form { grid-template-columns: 1fr; }
+  .workspace.split.trade-layout { grid-template-columns: 1fr; }
+}
+
 body.is-loading .table-shell {
   opacity: 0.72;
   transition: opacity 0.2s ease;
@@ -858,7 +878,7 @@ body.is-loading .table-shell {
   flex-wrap: wrap;
   gap: 0.45rem;
 }
-button.primary, .primary {
+button.primary, .primary, a.primary {
   border: 0;
   background: var(--accent);
   color: #f4faf7;
@@ -866,9 +886,11 @@ button.primary, .primary {
   font-weight: 600;
   padding: 0.55rem 0.95rem;
   cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
   transition: transform 0.15s ease, opacity 0.15s ease;
 }
-button.primary:hover, .primary:hover { transform: translateY(-1px); }
+button.primary:hover, .primary:hover, a.primary:hover { transform: translateY(-1px); }
 button.tiny { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
 .drawer-actions { margin: 0.75rem 0 1rem; }
 

@@ -153,6 +153,23 @@ def get_position(position_id: str, *, root: Path | None = None) -> dict[str, Any
     return None
 
 
+def _rel_pct(to_price: float | None, from_price: float | None) -> float | None:
+    if to_price is None or from_price is None or from_price == 0:
+        return None
+    return to_price / from_price - 1.0
+
+
+def _reward_risk(
+    entry_price: float | None, target_price: float | None, stop_price: float | None
+) -> float | None:
+    if entry_price is None or target_price is None or stop_price is None:
+        return None
+    risk = entry_price - stop_price
+    if risk <= 0:
+        return None
+    return (target_price - entry_price) / risk
+
+
 def build_diary_marks(
     *,
     snapshot: dict[str, Any] | None = None,
@@ -203,6 +220,10 @@ def build_diary_marks(
         "shares": shares,
         "pnl_abs": None if pnl is None else pnl.get("pnl_abs"),
         "pnl_pct": None if pnl is None else pnl.get("pnl_pct"),
+        "upside_pct": _rel_pct(target_price, last_price),
+        "upside_from_entry_pct": _rel_pct(target_price, entry_price),
+        "downside_pct": _rel_pct(stop_price, last_price),
+        "reward_risk": _reward_risk(entry_price, target_price, stop_price),
         "final_standing": _finite(scores.get("final_standing")),
     }
 
@@ -588,6 +609,10 @@ def export_diary_csv(
         "shares",
         "pnl_abs",
         "pnl_pct",
+        "upside_pct",
+        "upside_from_entry_pct",
+        "downside_pct",
+        "reward_risk",
     ]
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
@@ -613,6 +638,10 @@ def export_diary_csv(
                 "shares": marks.get("shares"),
                 "pnl_abs": marks.get("pnl_abs"),
                 "pnl_pct": marks.get("pnl_pct"),
+                "upside_pct": marks.get("upside_pct"),
+                "upside_from_entry_pct": marks.get("upside_from_entry_pct"),
+                "downside_pct": marks.get("downside_pct"),
+                "reward_risk": marks.get("reward_risk"),
             }
         )
     return buf.getvalue()

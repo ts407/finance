@@ -56,6 +56,74 @@ export const KIND_LABELS = {
   close: "Verkauf",
 };
 
+export function fmtPct(n, digits = 1) {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  const sign = Number(n) > 0 ? "+" : "";
+  return `${sign}${(Number(n) * 100).toFixed(digits)}%`;
+}
+
+export function relPct(to, from) {
+  const a = Number(to);
+  const b = Number(from);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return null;
+  return a / b - 1;
+}
+
+export function rewardRisk(entry, target, stop) {
+  const e = Number(entry);
+  const t = Number(target);
+  const s = Number(stop);
+  if (![e, t, s].every(Number.isFinite) || e <= s) return null;
+  return (t - e) / (e - s);
+}
+
+export function geometryMarks({ last, entry, target, stop, shares, pnlAbs, pnlPct, finalStanding }) {
+  const upside = relPct(target, last);
+  const upsideEntry = relPct(target, entry);
+  const downside = relPct(stop, last);
+  const rr = rewardRisk(entry, target, stop);
+  return {
+    last_price: last,
+    entry_price: entry,
+    target_price: target,
+    stop_price: stop,
+    shares,
+    pnl_abs: pnlAbs,
+    pnl_pct: pnlPct,
+    upside_pct: upside,
+    upside_from_entry_pct: upsideEntry,
+    downside_pct: downside,
+    reward_risk: rr,
+    final_standing: finalStanding,
+  };
+}
+
+export function geometryGrid(marks) {
+  const m = marks || {};
+  const rr = m.reward_risk;
+  const pairs = [
+    ["Aktueller Kurs", fmtPx(m.last_price), ""],
+    ["Kurs bei Einstieg", fmtPx(m.entry_price), ""],
+    ["Zielkurs", fmtPx(m.target_price), ""],
+    ["Stop", fmtPx(m.stop_price), ""],
+    ["Upside Potential", fmtPct(m.upside_pct), pnlClass(m.upside_pct)],
+    ["These-Upside", fmtPct(m.upside_from_entry_pct), pnlClass(m.upside_from_entry_pct)],
+    ["Dist → Stop", fmtPct(m.downside_pct), pnlClass(m.downside_pct)],
+    ["Chance/Risiko", rr == null || Number.isNaN(Number(rr)) ? "—" : `${fmt(rr, 2)}×`, ""],
+    ["Stück", m.shares == null ? "—" : fmt(m.shares, 4), ""],
+    ["P&L", fmtPnl(m.pnl_abs, m.pnl_pct), pnlClass(m.pnl_abs)],
+  ];
+  if (m.final_standing != null) {
+    pairs.push(["Final", fmt(m.final_standing), ""]);
+  }
+  return pairs
+    .map(
+      ([label, value, cls]) =>
+        `<div><dt>${escapeHtml(label)}</dt><dd class="${cls}">${escapeHtml(value)}</dd></div>`,
+    )
+    .join("");
+}
+
 export function fmtPnl(abs, pct) {
   if (abs == null || Number.isNaN(Number(abs))) return "—";
   const sign = Number(abs) > 0 ? "+" : "";
@@ -138,13 +206,20 @@ export function diaryCard(entry) {
     </header>
     <p>${escapeHtml(entry.comment)}</p>
     <dl class="mark-grid">
-      <div><dt>Aktueller Kurs</dt><dd>${escapeHtml(fmtPx(last))}</dd></div>
-      <div><dt>Kurs bei Einstieg</dt><dd>${escapeHtml(fmtPx(marks.entry_price))}</dd></div>
-      <div><dt>Zielkurs</dt><dd>${escapeHtml(fmtPx(marks.target_price))}</dd></div>
-      <div><dt>Stop</dt><dd>${escapeHtml(fmtPx(marks.stop_price))}</dd></div>
-      <div><dt>Stück</dt><dd>${escapeHtml(marks.shares == null ? "—" : fmt(marks.shares, 4))}</dd></div>
-      <div><dt>P&amp;L</dt><dd class="${pnlClass(pnl)}">${escapeHtml(fmtPnl(pnl, marks.pnl_pct))}</dd></div>
-      <div><dt>Final</dt><dd>${escapeHtml(fmt(final))}</dd></div>
+      ${geometryGrid({
+        last_price: last,
+        entry_price: marks.entry_price,
+        target_price: marks.target_price,
+        stop_price: marks.stop_price,
+        shares: marks.shares,
+        pnl_abs: pnl,
+        pnl_pct: marks.pnl_pct,
+        upside_pct: marks.upside_pct,
+        upside_from_entry_pct: marks.upside_from_entry_pct,
+        downside_pct: marks.downside_pct,
+        reward_risk: marks.reward_risk,
+        final_standing: final,
+      })}
     </dl>
     <p class="note-meta">
       V ${escapeHtml(fmt(scores.value))} · Q ${escapeHtml(fmt(scores.quality))} · M ${escapeHtml(fmt(scores.momentum))}
@@ -164,6 +239,7 @@ export function fillSourceControls(els) {
 export const NAV = `
   <a href="/">Desk</a>
   <a href="/portfolio">Portfolio</a>
+  <a href="/trade">Trade</a>
   <a href="/diary">Diary</a>
   <a href="/methodology">Methodology</a>
 `;

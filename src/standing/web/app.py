@@ -233,6 +233,37 @@ class PositionClose(BaseModel):
     prefer_store: bool | None = None
 
 
+class TradeBuy(BaseModel):
+    ticker: str = Field(min_length=1, max_length=16)
+    price: float = Field(gt=0)
+    size: float = Field(gt=0)
+    thesis: str = Field(min_length=1, max_length=8000)
+    mechanism: str = Field(min_length=1, max_length=4000)
+    falsifier: str = Field(min_length=1)
+    target: float = Field(gt=0)
+    stop: float = Field(gt=0)
+    horizon: str = "90d"
+    conviction: int = Field(default=3, ge=1, le=5)
+    buy_reason: str | None = Field(default=None, max_length=4000)
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+
+
+class TradeSell(BaseModel):
+    ticker: str = Field(min_length=1, max_length=16)
+    price: float = Field(gt=0)
+    reason: Literal["target", "stop", "thesis_broken", "rebalance", "manual"]
+    note: str = Field(min_length=1, max_length=8000)
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+
+
 def _parse_as_of(value: str | None) -> date:
     if not value:
         return date.today()
@@ -1054,6 +1085,174 @@ def create_app() -> FastAPI:
         log.info("holdings close id=%s ticker=%s", position_id, pos["ticker"])
         return result
 
+    def _desk_snapshot_seed(match: dict[str, Any], meta: dict[str, Any]):
+        from standing.web.portfolio_api import SnapshotSeed
+
+        if not match or match.get("final_standing") is None:
+            return None
+        return SnapshotSeed(
+            as_of=str(meta.get("as_of") or date.today().isoformat()),
+            universe_version=str(meta.get("universe_id") or "desk"),
+            score=float(match["final_standing"]),
+            pillar_fundamentals=None if match.get("value") is None else float(match["value"]),
+            pillar_momentum=None if match.get("momentum") is None else float(match["momentum"]),
+            pillar_attention=None if match.get("s_used") is None else float(match["s_used"]),
+            coverage_flags={
+                "value_coverage": match.get("value_coverage"),
+                "value_ev_rung": match.get("value_ev_rung"),
+                "sector_low_confidence": match.get("sector_low_confidence"),
+            },
+            provider_state={
+                "market_mode": meta.get("market_mode"),
+                "social_mode": meta.get("social_mode"),
+                "market_provider": meta.get("market_provider"),
+                "social_provider": meta.get("social_provider"),
+            },
+        )
+
+    @app.post("/api/trade/buy")
+    def trade_buy(body: TradeBuy) -> dict[str, Any]:
+        from standing.desk.ledger import open_or_add_position
+        from standing.portfolio.cli_support import parse_horizon
+        from standing.web.portfolio_api import (
+            _ensure_snapshot,
+            _http_from_portfolio,
+            _repo,
+            _seed_mark,
+        )
+
+        meta, match, snap = _row_and_snapshot(
+            ticker=body.ticker,
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+        )
+        seed = _desk_snapshot_seed(match, meta)
+        if seed is None:
+            from standing.web.portfolio_api import SnapshotSeed
+
+            seed = SnapshotSeed(
+                as_of=str(meta.get("as_of") or date.today().isoformat()),
+                universe_version=str(meta.get("universe_id") or "desk"),
+                score=0.0,
+            )
+        repo = _repo()
+        try:
+            try:
+                horizon_days = parse_horizon(body.horizon)
+                snapshot_id = _ensure_snapshot(repo, body.ticker, seed)
+                _seed_mark(repo, body.ticker, body.price)
+                position, thesis, entry = repo.open_position(
+                    ticker=body.ticker,
+                    entry_price=body.price,
+                    size=body.size,
+                    claim=body.thesis,
+                    mechanism=body.mechanism,
+                    falsifier=body.falsifier,
+                    target_price=body.target,
+                    stop_price=body.stop,
+                    horizon_days=horizon_days,
+                    conviction=body.conviction,
+                    entry_snapshot_id=snapshot_id,
+                )
+            except Exception as exc:
+                raise _http_from_portfolio(exc) from exc
+        finally:
+            repo.conn.close()
+
+        reason = (body.buy_reason or body.thesis).strip()
+        holdings = None
+        holdings_error = None
+        try:
+            holdings = open_or_add_position(
+                ticker=body.ticker,
+                shares=body.size,
+                avg_cost=body.price,
+                buy_reason=reason,
+                thesis=body.thesis,
+                snapshot=snap,
+                comment=f"Kauf {body.size:g} {body.ticker.upper()} @ {body.price:g}. {reason}",
+                book=_book_overlay_for(body.ticker),
+            )
+        except Exception as exc:
+            holdings_error = str(exc)
+            log.warning("trade buy desk ledger failed ticker=%s: %s", body.ticker.upper(), exc)
+        log.info("trade buy ticker=%s position_id=%s", position.ticker, position.position_id)
+        return {
+            "ticker": position.ticker,
+            "position_id": position.position_id,
+            "entry_price": position.entry_price,
+            "size": position.size,
+            "thesis_id": thesis.thesis_id,
+            "journal_entry_id": entry.entry_id,
+            "holdings": holdings,
+            "diary_entry": None if holdings is None else holdings.get("diary_entry"),
+            "holdings_error": holdings_error,
+        }
+
+    @app.post("/api/trade/sell")
+    def trade_sell(body: TradeSell) -> dict[str, Any]:
+        from standing.desk.ledger import close_position, get_open_position
+        from standing.portfolio.models import CloseReason
+        from standing.web.portfolio_api import _http_from_portfolio, _repo, _seed_mark
+
+        meta, match, snap = _row_and_snapshot(
+            ticker=body.ticker,
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+        )
+        repo = _repo()
+        try:
+            try:
+                snap_row = repo.get_latest_snapshot(body.ticker)
+                position, entry = repo.close_position(
+                    ticker=body.ticker,
+                    close_price=body.price,
+                    reason=CloseReason(body.reason),
+                    exit_note=body.note,
+                    linked_snapshot_id=snap_row.snapshot_id if snap_row else None,
+                )
+                as_of = date.fromisoformat(body.as_of) if body.as_of else date.today()
+                _seed_mark(repo, body.ticker, body.price, as_of=as_of)
+            except Exception as exc:
+                raise _http_from_portfolio(exc) from exc
+        finally:
+            repo.conn.close()
+
+        holdings = None
+        holdings_error = None
+        held = get_open_position(body.ticker)
+        if held is not None:
+            try:
+                holdings = close_position(
+                    held["id"],
+                    close_price=body.price,
+                    snapshot=snap,
+                    comment=body.note,
+                    book=_book_overlay_for(body.ticker),
+                )
+            except Exception as exc:
+                holdings_error = str(exc)
+                log.warning("trade sell desk ledger failed ticker=%s: %s", body.ticker.upper(), exc)
+        pnl = (position.close_price / position.entry_price - 1.0) * 100.0
+        log.info("trade sell ticker=%s reason=%s", position.ticker, body.reason)
+        return {
+            "ticker": position.ticker,
+            "position_id": position.position_id,
+            "close_price": position.close_price,
+            "close_reason": position.close_reason.value if position.close_reason else None,
+            "pnl_pct": pnl,
+            "exit_note_id": entry.entry_id,
+            "holdings": holdings,
+            "diary_entry": None if holdings is None else holdings.get("diary_entry"),
+            "holdings_error": holdings_error,
+        }
+
     @app.get("/api/diary")
     def diary_list(
         ticker: str | None = Query(default=None),
@@ -1155,6 +1354,10 @@ def create_app() -> FastAPI:
     @app.get("/diary")
     def diary_page() -> FileResponse:
         return FileResponse(STATIC_DIR / "diary.html")
+
+    @app.get("/trade")
+    def trade_page() -> FileResponse:
+        return FileResponse(STATIC_DIR / "trade.html")
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     log.info("Standing web app created")
