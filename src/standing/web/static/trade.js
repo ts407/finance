@@ -3,6 +3,7 @@ import {
   apiGet,
   apiSend,
   escapeHtml,
+  factsHtml,
   fillSourceControls,
   fmt,
   fmtPct,
@@ -10,6 +11,7 @@ import {
   geometryGrid,
   geometryMarks,
   pnlClass,
+  scoreFacts,
   sourceParams,
   storeSource,
 } from "./ledger.js";
@@ -50,9 +52,45 @@ const els = {
   geo: document.getElementById("geo"),
   quote: document.getElementById("quote"),
   bookBody: document.getElementById("book-body"),
+  btnSnap: document.getElementById("btn-snap"),
+  snapCard: document.getElementById("snap-card"),
+  snapEmpty: document.getElementById("snap-empty"),
+  snapFacts: document.getElementById("snap-facts"),
+  snapMeta: document.getElementById("snap-meta"),
+  entwurfForm: document.getElementById("entwurf-form"),
+  entwurfUrl: document.getElementById("entwurf-url"),
+  entwurfText: document.getElementById("entwurf-text"),
+  entwurfPng: document.getElementById("entwurf-png"),
+  entwurfTicker: document.getElementById("entwurf-ticker"),
+  entwurfUrlField: document.getElementById("entwurf-url-field"),
+  entwurfTextField: document.getElementById("entwurf-text-field"),
+  entwurfPngField: document.getElementById("entwurf-png-field"),
+  entwurfCard: document.getElementById("entwurf-card"),
+  entwurfEmpty: document.getElementById("entwurf-empty"),
+  entwurfBody: document.getElementById("entwurf-body"),
+  entwurfSourceMeta: document.getElementById("entwurf-source-meta"),
+  entwurfFigure: document.getElementById("entwurf-figure"),
+  entwurfImage: document.getElementById("entwurf-image"),
+  entwurfFundamentals: document.getElementById("entwurf-fundamentals"),
+  entwurfThesis: document.getElementById("entwurf-thesis"),
+  entwurfReason: document.getElementById("entwurf-reason"),
+  entwurfMechanism: document.getElementById("entwurf-mechanism"),
+  entwurfFalsifier: document.getElementById("entwurf-falsifier"),
+  btnEntwurfApply: document.getElementById("btn-entwurf-apply"),
 };
 
-const state = { side: "buy", book: [], last: null, thesis: null };
+const state = {
+  side: "buy",
+  book: [],
+  last: null,
+  thesis: null,
+  snap: null,
+  pendingSnap: null,
+  snapSource: "",
+  stale: false,
+  entwurfSource: "url",
+  entwurf: null,
+};
 
 function sourceBody() {
   storeSource({ as_of: els.asOf.value, market: els.market.value, social: els.social.value });
@@ -66,6 +104,220 @@ function sourceBody() {
     market: src.get("market"),
     social: src.get("social"),
   };
+}
+
+function sourceKey() {
+  const src = sourceBody();
+  return `${src.as_of || ""}|${src.market || ""}|${src.social || ""}`;
+}
+
+function currentTicker() {
+  const sell = state.side === "sell" ? els.sellTicker.value : "";
+  return (sell || els.buyTicker.value || els.entwurfTicker.value || "").trim().toUpperCase();
+}
+
+function setEntwurfSource(source) {
+  const next = source === "text" || source === "png" ? source : "url";
+  state.entwurfSource = next;
+  ["url", "text", "png"].forEach((key) => {
+    const tab = document.getElementById(`entwurf-tab-${key}`);
+    if (tab) {
+      tab.classList.toggle("active", key === next);
+      tab.setAttribute("aria-selected", String(key === next));
+    }
+  });
+  if (els.entwurfUrlField) els.entwurfUrlField.classList.toggle("hidden", next !== "url");
+  if (els.entwurfTextField) els.entwurfTextField.classList.toggle("hidden", next !== "text");
+  if (els.entwurfPngField) els.entwurfPngField.classList.toggle("hidden", next !== "png");
+}
+
+function renderEntwurf(result) {
+  state.entwurf = result || null;
+  const ready = Boolean(result && result.draft);
+  els.entwurfEmpty.classList.toggle("hidden", ready);
+  els.entwurfBody.classList.toggle("hidden", !ready);
+  els.entwurfCard.classList.toggle("is-ready", ready);
+  if (!ready) {
+    if (!els.entwurfEmpty.dataset.kind) {
+      els.entwurfEmpty.textContent = "Link, Text oder PNG eingeben — persönlicher Entwurf, keine Empfehlung.";
+    }
+    els.entwurfFundamentals.innerHTML = "";
+    els.entwurfSourceMeta.textContent = "";
+    els.entwurfFigure.classList.add("hidden");
+    els.entwurfImage.removeAttribute("src");
+    return;
+  }
+  els.entwurfEmpty.dataset.kind = "";
+  const draft = result.draft || {};
+  const sourceLabel = result.source === "url" ? "Link" : result.source === "png" ? "PNG" : "Text";
+  const bits = [`Quelle: ${sourceLabel}`];
+  if (result.ticker) bits.push(result.ticker);
+  if (result.title) bits.push(result.title);
+  if (result.url) bits.push(result.url);
+  els.entwurfSourceMeta.textContent = bits.join(" · ");
+  els.entwurfThesis.value = draft.thesis || "";
+  els.entwurfReason.value = draft.buy_reason || "";
+  els.entwurfMechanism.value = draft.mechanism || "";
+  els.entwurfFalsifier.value = draft.falsifier || "";
+  if (result.ticker && result.ticker !== "ENTWURF" && !els.entwurfTicker.value) {
+    els.entwurfTicker.value = result.ticker;
+  }
+  const display = result.fundamentals_display || [];
+  els.entwurfFundamentals.innerHTML = display.length
+    ? factsHtml(display)
+    : "";
+  if (result.attachment_url) {
+    els.entwurfImage.src = result.attachment_url;
+    els.entwurfFigure.classList.remove("hidden");
+  } else {
+    els.entwurfFigure.classList.add("hidden");
+    els.entwurfImage.removeAttribute("src");
+  }
+}
+
+function fileToPngPayload(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("PNG fehlt"));
+      return;
+    }
+    const type = (file.type || "").toLowerCase();
+    if (type && type !== "image/png") {
+      reject(new Error("Nur PNG"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("PNG konnte nicht gelesen werden"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function applyEntwurfToKauf() {
+  const apply = (state.entwurf && state.entwurf.apply) || {};
+  const original = (state.entwurf && state.entwurf.draft) || {};
+  const ticker = (els.entwurfTicker.value || apply.ticker || "").trim().toUpperCase();
+  setSide("buy");
+  if (ticker && ticker !== "ENTWURF") els.buyTicker.value = ticker;
+  if (els.entwurfThesis.value) els.buyThesis.value = els.entwurfThesis.value;
+  if (els.entwurfReason.value) els.buyReason.value = els.entwurfReason.value;
+  if (els.entwurfMechanism.value) els.buyMechanism.value = els.entwurfMechanism.value;
+  const edited = (els.entwurfFalsifier.value || "").trim();
+  const originalFalsifier = original.falsifier || "";
+  if (edited && edited !== originalFalsifier) {
+    els.buyFalsifier.value = edited;
+  } else if (apply.falsifier) {
+    els.buyFalsifier.value = apply.falsifier;
+  }
+  setStatus("Entwurf in Kauf-Formular übernommen — noch nicht gebucht.");
+  logger.info("trade entwurf applied", { ticker: ticker || null });
+  if (ticker && ticker !== "ENTWURF") loadTicker(ticker);
+}
+
+async function developEntwurf(e) {
+  e.preventDefault();
+  const ticker = (els.entwurfTicker.value || els.buyTicker.value || "").trim().toUpperCase();
+  const body = {
+    source: state.entwurfSource,
+    ticker: ticker || null,
+    ...sourceBody(),
+    ...(state.snap && (!ticker || (state.snap.scores && state.snap.scores.ticker) === ticker)
+      ? { score_snap: state.snap }
+      : {}),
+  };
+  try {
+    if (state.entwurfSource === "url") {
+      body.url = (els.entwurfUrl.value || "").trim();
+      if (!body.url) throw new Error("Link fehlt");
+    } else if (state.entwurfSource === "text") {
+      body.text = (els.entwurfText.value || "").trim();
+      if (!body.text) throw new Error("Text fehlt");
+    } else {
+      const file = els.entwurfPng.files && els.entwurfPng.files[0];
+      body.image_b64 = await fileToPngPayload(file);
+      body.filename = file.name;
+    }
+    setStatus("Entwurf wird entwickelt…");
+    const result = await apiSend("/api/trade/entwurf", "POST", body);
+    renderEntwurf(result);
+    if (result.ticker && result.ticker !== "ENTWURF") {
+      els.entwurfTicker.value = result.ticker;
+    }
+    setStatus(`Entwurf ${result.ticker || ""} · nicht gebucht, nicht score-wirksam`);
+    logger.info("trade entwurf ok", { ticker: result.ticker, source: result.source, id: result.id });
+  } catch (err) {
+    els.entwurfEmpty.classList.remove("hidden");
+    els.entwurfBody.classList.add("hidden");
+    els.entwurfEmpty.dataset.kind = "error";
+    els.entwurfEmpty.textContent = err.message;
+    setStatus(`Entwurf fehlgeschlagen: ${err.message}`, "error");
+    logger.warn("trade entwurf failed", { message: err.message });
+  }
+}
+
+function fmtUtc(iso) {
+  if (!iso) return "—";
+  return `${String(iso).replace("T", " ").replace("Z", "").slice(0, 19)} UTC`;
+}
+
+function renderSnap() {
+  const snap = state.snap;
+  els.snapCard.classList.toggle("is-frozen", Boolean(snap) && !state.stale);
+  els.snapCard.classList.toggle("is-stale", Boolean(snap) && state.stale);
+  if (!snap) {
+    els.snapEmpty.classList.remove("hidden");
+    els.snapFacts.innerHTML = "";
+    els.snapMeta.textContent = "";
+    if (!els.snapEmpty.textContent || els.snapEmpty.dataset.kind !== "error") {
+      els.snapEmpty.dataset.kind = "";
+      els.snapEmpty.textContent = "Load a ticker, then freeze the desk score.";
+    }
+    return;
+  }
+  els.snapEmpty.classList.add("hidden");
+  els.snapEmpty.dataset.kind = "";
+  els.snapFacts.innerHTML = factsHtml(scoreFacts(snap));
+  const stale = state.stale ? " Source changed — snap again to freeze." : "";
+  els.snapMeta.textContent =
+    `Frozen ${fmtUtc(snap.captured_utc)} · as of ${snap.as_of || "—"} · ${snap.methodology_version || "—"} · ${snap.market_mode || "—"}/${snap.social_mode || "—"}.${stale}`;
+}
+
+async function snapScore({ recapture = false } = {}) {
+  const ticker = currentTicker();
+  if (!ticker) {
+    state.snap = null;
+    state.pendingSnap = null;
+    state.stale = false;
+    els.snapEmpty.dataset.kind = "";
+    renderSnap();
+    return null;
+  }
+  const body = { ticker, ...sourceBody() };
+  if (!recapture && state.pendingSnap) body.score_snap = state.pendingSnap;
+  try {
+    setStatus(`Freezing score ${ticker}…`);
+    const result = await apiSend("/api/trade/snap", "POST", body);
+    state.snap = result.snapshot;
+    state.pendingSnap = result.snapshot;
+    state.snapSource = sourceKey();
+    state.stale = false;
+    renderSnap();
+    setStatus(`Score frozen ${ticker} · ${fmtUtc(result.snapshot && result.snapshot.captured_utc)}`);
+    logger.info("trade snap ok", { ticker, snapshot_id: result.snapshot_id });
+    return result;
+  } catch (err) {
+    state.snap = null;
+    state.stale = false;
+    els.snapEmpty.classList.remove("hidden");
+    els.snapEmpty.dataset.kind = "error";
+    els.snapEmpty.textContent = err.message;
+    els.snapFacts.innerHTML = "";
+    els.snapMeta.textContent = "";
+    els.snapCard.classList.remove("is-frozen", "is-stale");
+    setStatus(`Score snap failed: ${err.message}`, "error");
+    logger.warn("trade snap failed", { ticker, message: err.message });
+    return null;
+  }
 }
 
 function setSide(side) {
@@ -199,6 +451,10 @@ async function loadTicker(ticker) {
   const key = (ticker || "").trim().toUpperCase();
   if (!key) {
     els.quote.innerHTML = "";
+    state.snap = null;
+    state.pendingSnap = null;
+    state.stale = false;
+    renderSnap();
     return;
   }
   try {
@@ -208,11 +464,18 @@ async function loadTicker(ticker) {
       social: els.social.value,
     });
     const detail = await apiGet(`/api/ticker/${encodeURIComponent(key)}?${src.toString()}`);
+    state.pendingSnap = detail.snapshot || null;
     renderQuote(detail);
     applyQuoteToForms(detail);
+    if (els.entwurfTicker && !els.entwurfTicker.value) els.entwurfTicker.value = key;
     logger.info("trade quote", { ticker: key, last: detail.row && detail.row.last_price });
+    await snapScore({ recapture: false });
   } catch (err) {
     els.quote.innerHTML = `<div><dt>Quote</dt><dd>${escapeHtml(err.message)}</dd></div>`;
+    state.snap = null;
+    state.pendingSnap = null;
+    state.stale = false;
+    renderSnap();
     logger.warn("trade quote failed", { ticker: key, message: err.message });
   }
 }
@@ -284,13 +547,36 @@ fillSourceControls(els);
 const boot = new URL(location.href);
 if (boot.searchParams.get("ticker")) {
   els.buyTicker.value = boot.searchParams.get("ticker").toUpperCase();
+  if (els.entwurfTicker) els.entwurfTicker.value = els.buyTicker.value;
 }
 setSide((boot.searchParams.get("side") || "buy").toLowerCase());
+setEntwurfSource("url");
 
 els.tabBuy.addEventListener("click", () => setSide("buy"));
 els.tabSell.addEventListener("click", () => setSide("sell"));
-els.buyTicker.addEventListener("change", () => loadTicker(els.buyTicker.value));
+els.buyTicker.addEventListener("change", () => {
+  if (els.entwurfTicker && !els.entwurfTicker.value) els.entwurfTicker.value = els.buyTicker.value.trim().toUpperCase();
+  loadTicker(els.buyTicker.value);
+});
 els.buyTicker.addEventListener("blur", () => loadTicker(els.buyTicker.value));
+els.btnSnap.addEventListener("click", () => snapScore({ recapture: true }));
+document.querySelectorAll("[data-entwurf-source]").forEach((tab) => {
+  tab.addEventListener("click", () => setEntwurfSource(tab.dataset.entwurfSource));
+});
+if (els.entwurfForm) els.entwurfForm.addEventListener("submit", developEntwurf);
+if (els.btnEntwurfApply) els.btnEntwurfApply.addEventListener("click", applyEntwurfToKauf);
+["as-of", "market", "social"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener("change", () => {
+    if (state.snap && state.snapSource !== sourceKey()) {
+      state.stale = true;
+      renderSnap();
+    }
+    const t = currentTicker();
+    if (t) loadTicker(t);
+  });
+});
 ["buy-price", "buy-target", "buy-stop", "buy-size", "sell-price"].forEach((id) => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("input", refreshGeometry);
@@ -327,6 +613,7 @@ els.buyForm.addEventListener("submit", async (e) => {
       mechanism: els.buyMechanism.value,
       falsifier: els.buyFalsifier.value,
       ...sourceBody(),
+      ...(state.snap ? { score_snap: state.snap } : {}),
     });
     els.buyThesis.value = "";
     els.buyReason.value = "";
@@ -354,6 +641,7 @@ els.sellForm.addEventListener("submit", async (e) => {
       reason: els.sellReason.value,
       note: els.sellNote.value,
       ...sourceBody(),
+      ...(state.snap ? { score_snap: state.snap } : {}),
     });
     els.sellNote.value = "";
     els.sellPrice.value = "";

@@ -26,7 +26,7 @@
     <div class="brand-block">
       <p class="eyebrow">personal · book of record</p>
       <h1 class="brand">Trade</h1>
-      <p class="tagline">Kauf und Verkauf with Aktueller Kurs, Zielkurs, Upside Potential, Stop, and Chance/Risiko. Personal log — not a broker, not advice.</p>
+      <p class="tagline">Kauf und Verkauf with Aktueller Kurs, Zielkurs, Upside Potential, Stop, and Chance/Risiko. Freeze the desk score, or develop a link / text / PNG into an Entwurf before you book. Personal log — not a broker, not advice.</p>
     </div>
   </header>
 
@@ -56,7 +56,7 @@
     </div>
   </section>
 
-  <p class="disclaimer">Not a broker. A Kauf writes the SQLite book plus an append-only Tagebuch note. Historical judgement only.</p>
+  <p class="disclaimer">Not a broker. A Kauf writes the SQLite book plus an append-only Tagebuch note. Score einfrieren locks Final / V / Q / M at this as-of — submit does not re-score. Entwurf is a personal sketch (These / KGV) — qualitative loop reference only, never a score input.</p>
   <p class="status-line" id="status-line" role="status"></p>
 
   <main class="workspace split trade-layout">
@@ -120,6 +120,69 @@
     </section>
 
     <section class="board">
+      <div class="board-head">
+        <div>
+          <h2>Score in time</h2>
+          <p id="snap-lead">Freeze Final / V / Q / M / Tilt at this as-of. Kauf and Verkauf attach this freeze.</p>
+        </div>
+        <button type="button" class="ghost" id="btn-snap">Score einfrieren</button>
+      </div>
+      <div class="snap-card" id="snap-card">
+        <p class="muted" id="snap-empty">Load a ticker, then freeze the desk score.</p>
+        <dl class="facts" id="snap-facts"></dl>
+        <p class="note-meta" id="snap-meta"></p>
+      </div>
+
+      <div class="board-head">
+        <div>
+          <h2>Entwurf</h2>
+          <p>Link, Text oder PNG zu These / Grund / Mechanismus entwickeln — inkl. KGV, soweit die Desk-Zeile sie hat. Nicht übernehmen = nicht gebucht.</p>
+        </div>
+      </div>
+      <form id="entwurf-form" class="ledger-form trade-form entwurf-form">
+        <div class="view-toggle span-2" role="tablist" aria-label="Entwurf-Quelle">
+          <button type="button" class="tab active" id="entwurf-tab-url" data-entwurf-source="url" role="tab" aria-selected="true">Link</button>
+          <button type="button" class="tab" id="entwurf-tab-text" data-entwurf-source="text" role="tab" aria-selected="false">Text</button>
+          <button type="button" class="tab" id="entwurf-tab-png" data-entwurf-source="png" role="tab" aria-selected="false">PNG</button>
+        </div>
+        <label id="entwurf-url-field" class="span-2">Link
+          <input id="entwurf-url" type="url" maxlength="2000" placeholder="https://…" autocomplete="off" />
+        </label>
+        <label id="entwurf-text-field" class="span-2 hidden">Text
+          <textarea id="entwurf-text" maxlength="8000" placeholder="Beobachtung, Filing-Auszug, These-Skizze…"></textarea>
+        </label>
+        <label id="entwurf-png-field" class="span-2 hidden">PNG
+          <input id="entwurf-png" type="file" accept="image/png,.png" />
+        </label>
+        <label>Ticker
+          <input id="entwurf-ticker" maxlength="12" placeholder="MSFT" autocomplete="off" />
+        </label>
+        <button type="submit" class="ghost" id="btn-entwurf">Entwurf entwickeln</button>
+      </form>
+      <div class="snap-card entwurf-card" id="entwurf-card">
+        <p class="muted" id="entwurf-empty">Link, Text oder PNG eingeben — persönlicher Entwurf, keine Empfehlung.</p>
+        <div id="entwurf-body" class="hidden">
+          <p class="note-meta" id="entwurf-source-meta"></p>
+          <figure id="entwurf-figure" class="entwurf-figure hidden">
+            <img id="entwurf-image" alt="Entwurf PNG" />
+          </figure>
+          <dl class="facts" id="entwurf-fundamentals"></dl>
+          <label class="span-2">These
+            <textarea id="entwurf-thesis" maxlength="8000"></textarea>
+          </label>
+          <label class="span-2">Grund des Kaufens
+            <textarea id="entwurf-reason" maxlength="4000"></textarea>
+          </label>
+          <label class="span-2">Mechanismus
+            <textarea id="entwurf-mechanism" maxlength="4000"></textarea>
+          </label>
+          <label class="span-2">Falsifizierer
+            <textarea id="entwurf-falsifier" maxlength="4000"></textarea>
+          </label>
+          <button type="button" class="primary" id="btn-entwurf-apply">In Kauf-Formular übernehmen</button>
+        </div>
+      </div>
+
       <div class="board-head">
         <h2>Open book</h2>
         <p>SQLite positions on the tank. Click a row to sell.</p>

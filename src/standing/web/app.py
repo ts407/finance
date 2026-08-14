@@ -129,6 +129,19 @@ class StandingRow(BaseModel):
     value_pe_rung: str | None = None
     value_ev_rung: str | None = None
     value_metric_set: str | None = None
+    quality_coverage: float | None = None
+    momentum_coverage: float | None = None
+    pe_ttm: float | None = None
+    pe_forward: float | None = None
+    pb: float | None = None
+    ptbv: float | None = None
+    ps_ttm: float | None = None
+    ev_ebitda: float | None = None
+    ev_ebit: float | None = None
+    ev_sales: float | None = None
+    roe: float | None = None
+    operating_margin: float | None = None
+    revenue_growth_yoy: float | None = None
     portfolio: dict[str, Any] | None = None
 
 
@@ -250,6 +263,7 @@ class TradeBuy(BaseModel):
     social: str | None = None
     market: str | None = None
     prefer_store: bool | None = None
+    score_snap: dict[str, Any] | None = None
 
 
 class TradeSell(BaseModel):
@@ -262,6 +276,32 @@ class TradeSell(BaseModel):
     social: str | None = None
     market: str | None = None
     prefer_store: bool | None = None
+    score_snap: dict[str, Any] | None = None
+
+
+class TradeSnap(BaseModel):
+    ticker: str = Field(min_length=1, max_length=16)
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+    score_snap: dict[str, Any] | None = None
+
+
+class TradeEntwurf(BaseModel):
+    source: Literal["url", "text", "png"]
+    url: str | None = Field(default=None, max_length=2000)
+    text: str | None = Field(default=None, max_length=8000)
+    filename: str | None = Field(default=None, max_length=200)
+    image_b64: str | None = None
+    ticker: str | None = Field(default=None, max_length=16)
+    as_of: str | None = None
+    history_days: int = Field(default=14, ge=7, le=60)
+    social: str | None = None
+    market: str | None = None
+    prefer_store: bool | None = None
+    score_snap: dict[str, Any] | None = None
 
 
 def _parse_as_of(value: str | None) -> date:
@@ -941,6 +981,7 @@ def create_app() -> FastAPI:
             "position": dossier["position"],
             "diary": dossier["diary"][:8],
             "book": detail,
+            "snapshot": dossier["current_snapshot"],
         }
 
     @app.get("/api/holdings")
@@ -1107,8 +1148,228 @@ def create_app() -> FastAPI:
                 "social_mode": meta.get("social_mode"),
                 "market_provider": meta.get("market_provider"),
                 "social_provider": meta.get("social_provider"),
+                "methodology_version": meta.get("methodology_version"),
+                "captured_utc": meta.get("captured_utc"),
+                "score_kind": meta.get("score_kind"),
             },
         )
+
+    def _meta_from_score_snap(snap: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "as_of": snap.get("as_of"),
+            "universe_id": snap.get("universe_id"),
+            "methodology_version": snap.get("methodology_version"),
+            "score_kind": snap.get("score_kind"),
+            "placeholder": snap.get("placeholder"),
+            "market_mode": snap.get("market_mode"),
+            "social_mode": snap.get("social_mode"),
+            "attention_mode": snap.get("attention_mode"),
+            "captured_utc": snap.get("captured_utc"),
+        }
+
+    def _validate_score_snap(score_snap: dict[str, Any] | None, ticker: str) -> dict[str, Any] | None:
+        if score_snap is None:
+            return None
+        scores = score_snap.get("scores")
+        if not isinstance(scores, dict):
+            raise HTTPException(status_code=400, detail="score_snap must include scores")
+        snap_ticker = str(scores.get("ticker") or "").upper()
+        if snap_ticker and snap_ticker != ticker.strip().upper():
+            raise HTTPException(status_code=400, detail="score_snap ticker does not match")
+        return score_snap
+
+    def _resolve_trade_snapshot(
+        *,
+        ticker: str,
+        as_of: str | None,
+        history_days: int,
+        social: str | None,
+        market: str | None,
+        prefer_store: bool | None,
+        score_snap: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        frozen = _validate_score_snap(score_snap, ticker)
+        if frozen is not None:
+            return _meta_from_score_snap(frozen), dict(frozen.get("scores") or {}), frozen
+        return _row_and_snapshot(
+            ticker=ticker,
+            as_of=as_of,
+            history_days=history_days,
+            social=social,
+            market=market,
+            prefer_store=prefer_store,
+        )
+
+    def _trade_seed(match: dict[str, Any], meta: dict[str, Any]):
+        from standing.web.portfolio_api import SnapshotSeed
+
+        seed = _desk_snapshot_seed(match, meta)
+        if seed is not None:
+            return seed
+        return SnapshotSeed(
+            as_of=str(meta.get("as_of") or date.today().isoformat()),
+            universe_version=str(meta.get("universe_id") or "desk"),
+            score=0.0,
+        )
+
+    @app.post("/api/trade/snap")
+    def trade_snap(body: TradeSnap) -> dict[str, Any]:
+        from standing.web.portfolio_api import _ensure_snapshot, _http_from_portfolio, _repo, _seed_mark
+
+        meta, match, snap = _resolve_trade_snapshot(
+            ticker=body.ticker,
+            as_of=body.as_of,
+            history_days=body.history_days,
+            social=body.social,
+            market=body.market,
+            prefer_store=body.prefer_store,
+            score_snap=body.score_snap,
+        )
+        if body.score_snap is None and not match:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Ticker {body.ticker.strip().upper()} not in universe",
+            )
+        seed = _trade_seed(match, meta)
+        repo = _repo()
+        try:
+            try:
+                snapshot_id = _ensure_snapshot(repo, body.ticker, seed)
+                last = (snap.get("scores") or {}).get("last_price")
+                if last is not None:
+                    as_of = date.fromisoformat(seed.as_of) if seed.as_of else date.today()
+                    _seed_mark(repo, body.ticker, float(last), as_of=as_of)
+            except Exception as exc:
+                raise _http_from_portfolio(exc) from exc
+        finally:
+            repo.conn.close()
+        ticker = body.ticker.strip().upper()
+        log.info("trade snap ticker=%s snapshot_id=%s as_of=%s", ticker, snapshot_id, snap.get("as_of"))
+        return {
+            "ticker": ticker,
+            "snapshot": snap,
+            "snapshot_id": snapshot_id,
+            "last_price": (snap.get("scores") or {}).get("last_price"),
+            "row": match,
+        }
+
+    @app.post("/api/trade/entwurf")
+    def trade_entwurf(body: TradeEntwurf) -> dict[str, Any]:
+        from standing.desk.entwurf import (
+            decode_png_b64,
+            develop_draft,
+            entwurf_response,
+            fetch_url_preview,
+            persist_entwurf,
+            validate_http_url,
+        )
+        from standing.desk.ledger import capture_snapshot, get_open_position
+
+        png_bytes = None
+        filename = body.filename
+        preview_title = None
+        preview_snippet = None
+        try:
+            if body.source == "png":
+                png_bytes, filename = decode_png_b64(body.image_b64 or "", body.filename)
+            elif body.source == "url":
+                validate_http_url(body.url or "")
+                preview = fetch_url_preview(body.url or "")
+                preview_title = preview.get("title")
+                preview_snippet = preview.get("snippet")
+            elif body.source == "text":
+                if not (body.text or "").strip():
+                    raise ValueError("Text is empty")
+            else:
+                raise ValueError("source must be url, text, or png")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        payload = None
+        social_mode = None
+        market_mode = None
+        try:
+            _day, social_mode, market_mode, payload = _load_payload(
+                as_of=body.as_of,
+                history_days=body.history_days,
+                social=body.social,
+                market=body.market,
+                prefer_store=body.prefer_store,
+            )
+        except HTTPException:
+            payload = None
+
+        universe = None
+        if payload:
+            universe = {str(r.get("ticker") or "").upper() for r in payload.get("standings") or []}
+            universe.discard("")
+
+        developed = develop_draft(
+            source=body.source,
+            url=body.url,
+            text=body.text,
+            filename=filename,
+            title=preview_title,
+            snippet=preview_snippet,
+            ticker=body.ticker,
+            universe=universe,
+        )
+        ticker = str((developed.get("draft") or {}).get("ticker") or "ENTWURF")
+        score_snap = body.score_snap
+        if score_snap:
+            snap_ticker = str(((score_snap.get("scores") or {}).get("ticker") or "")).upper()
+            if snap_ticker and snap_ticker != ticker:
+                score_snap = None
+
+        match: dict[str, Any] = {}
+        if score_snap is not None:
+            _meta, match, snap = _resolve_trade_snapshot(
+                ticker=ticker,
+                as_of=body.as_of,
+                history_days=body.history_days,
+                social=body.social,
+                market=body.market,
+                prefer_store=body.prefer_store,
+                score_snap=score_snap,
+            )
+        elif payload and ticker != "ENTWURF":
+            match = next(
+                (r for r in payload["standings"] if str(r.get("ticker") or "").upper() == ticker),
+                {},
+            ) or {}
+            meta = {**payload.get("meta", {}), "social_mode": social_mode, "market_mode": market_mode}
+            snap = capture_snapshot(match, meta=meta)
+        else:
+            snap = capture_snapshot({}, meta={"as_of": body.as_of})
+
+        held = None if ticker == "ENTWURF" else get_open_position(ticker)
+        try:
+            entry = persist_entwurf(
+                developed,
+                snapshot=snap,
+                png_bytes=png_bytes,
+                original_filename=filename,
+                desk_position=held,
+                book=None if ticker == "ENTWURF" else _book_overlay_for(ticker),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        log.info("trade entwurf ticker=%s source=%s id=%s", ticker, body.source, entry.get("id"))
+        return entwurf_response(entry)
+
+    @app.get("/api/trade/entwurf/file/{name}")
+    def trade_entwurf_file(name: str) -> FileResponse:
+        import re as _re
+
+        from standing.desk.ledger import attachments_dir
+
+        if not _re.fullmatch(r"D_[A-Za-z0-9]+\.png", name):
+            raise HTTPException(status_code=400, detail="Invalid attachment name")
+        folder = attachments_dir().resolve()
+        path = (folder / name).resolve()
+        if path.parent != folder or not path.is_file():
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        return FileResponse(path, media_type="image/png")
 
     @app.post("/api/trade/buy")
     def trade_buy(body: TradeBuy) -> dict[str, Any]:
@@ -1121,23 +1382,16 @@ def create_app() -> FastAPI:
             _seed_mark,
         )
 
-        meta, match, snap = _row_and_snapshot(
+        meta, match, snap = _resolve_trade_snapshot(
             ticker=body.ticker,
             as_of=body.as_of,
             history_days=body.history_days,
             social=body.social,
             market=body.market,
             prefer_store=body.prefer_store,
+            score_snap=body.score_snap,
         )
-        seed = _desk_snapshot_seed(match, meta)
-        if seed is None:
-            from standing.web.portfolio_api import SnapshotSeed
-
-            seed = SnapshotSeed(
-                as_of=str(meta.get("as_of") or date.today().isoformat()),
-                universe_version=str(meta.get("universe_id") or "desk"),
-                score=0.0,
-            )
+        seed = _trade_seed(match, meta)
         repo = _repo()
         try:
             try:
@@ -1190,32 +1444,40 @@ def create_app() -> FastAPI:
             "holdings": holdings,
             "diary_entry": None if holdings is None else holdings.get("diary_entry"),
             "holdings_error": holdings_error,
+            "snapshot": snap,
         }
 
     @app.post("/api/trade/sell")
     def trade_sell(body: TradeSell) -> dict[str, Any]:
         from standing.desk.ledger import close_position, get_open_position
         from standing.portfolio.models import CloseReason
-        from standing.web.portfolio_api import _http_from_portfolio, _repo, _seed_mark
+        from standing.web.portfolio_api import (
+            _ensure_snapshot,
+            _http_from_portfolio,
+            _repo,
+            _seed_mark,
+        )
 
-        meta, match, snap = _row_and_snapshot(
+        meta, match, snap = _resolve_trade_snapshot(
             ticker=body.ticker,
             as_of=body.as_of,
             history_days=body.history_days,
             social=body.social,
             market=body.market,
             prefer_store=body.prefer_store,
+            score_snap=body.score_snap,
         )
+        seed = _trade_seed(match, meta)
         repo = _repo()
         try:
             try:
-                snap_row = repo.get_latest_snapshot(body.ticker)
+                snapshot_id = _ensure_snapshot(repo, body.ticker, seed)
                 position, entry = repo.close_position(
                     ticker=body.ticker,
                     close_price=body.price,
                     reason=CloseReason(body.reason),
                     exit_note=body.note,
-                    linked_snapshot_id=snap_row.snapshot_id if snap_row else None,
+                    linked_snapshot_id=snapshot_id,
                 )
                 as_of = date.fromisoformat(body.as_of) if body.as_of else date.today()
                 _seed_mark(repo, body.ticker, body.price, as_of=as_of)
@@ -1251,6 +1513,7 @@ def create_app() -> FastAPI:
             "holdings": holdings,
             "diary_entry": None if holdings is None else holdings.get("diary_entry"),
             "holdings_error": holdings_error,
+            "snapshot": snap,
         }
 
     @app.get("/api/diary")

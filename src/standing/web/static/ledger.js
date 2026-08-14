@@ -54,6 +54,7 @@ export const KIND_LABELS = {
   buy: "Kauf",
   add: "Nachkauf",
   close: "Verkauf",
+  entwurf: "Entwurf",
 };
 
 export function fmtPct(n, digits = 1) {
@@ -198,6 +199,20 @@ export function diaryCard(entry) {
   const final = marks.final_standing != null ? marks.final_standing : scores.final_standing;
   const pnl = marks.pnl_abs;
   const kindLabel = KIND_LABELS[entry.kind] || entry.kind;
+  const entwurf = entry.entwurf || {};
+  const attachment = entwurf.attachment || {};
+  const attachmentUrl = attachment.name ? `/api/trade/entwurf/file/${encodeURIComponent(attachment.name)}` : "";
+  const funds = entwurf.fundamentals || marks.fundamentals || {};
+  const fundBits = [];
+  if (funds.pe_ttm != null) fundBits.push(`KGV ${escapeHtml(fmt(funds.pe_ttm))}`);
+  if (funds.pb != null) fundBits.push(`KBV ${escapeHtml(fmt(funds.pb, 2))}`);
+  if (funds.ev_ebitda != null) fundBits.push(`EV/EBITDA ${escapeHtml(fmt(funds.ev_ebitda))}`);
+  const sourceLine = entwurf.source
+    ? `<p class="note-meta">Quelle ${escapeHtml(entwurf.source)}${entwurf.url ? ` · ${escapeHtml(entwurf.url)}` : ""}</p>`
+    : "";
+  const image = attachmentUrl
+    ? `<figure class="entwurf-figure"><img src="${escapeHtml(attachmentUrl)}" alt="" /></figure>`
+    : "";
   return `<article class="note-card" data-ticker="${escapeHtml(entry.ticker)}">
     <header>
       <a class="ticker-link" href="/diary?ticker=${encodeURIComponent(entry.ticker)}" data-filter-ticker="${escapeHtml(entry.ticker)}">${escapeHtml(entry.ticker)}</a>
@@ -205,6 +220,8 @@ export function diaryCard(entry) {
       <time>${escapeHtml((entry.created_utc || "").replace("T", " ").slice(0, 19))} UTC</time>
     </header>
     <p>${escapeHtml(entry.comment)}</p>
+    ${sourceLine}
+    ${image}
     <dl class="mark-grid">
       ${geometryGrid({
         last_price: last,
@@ -223,6 +240,7 @@ export function diaryCard(entry) {
     </dl>
     <p class="note-meta">
       V ${escapeHtml(fmt(scores.value))} · Q ${escapeHtml(fmt(scores.quality))} · M ${escapeHtml(fmt(scores.momentum))}
+      ${fundBits.length ? ` · ${fundBits.join(" · ")}` : ""}
       · ${escapeHtml(snap.methodology_version || "—")}
       · ${escapeHtml(snap.as_of || "—")}
     </p>

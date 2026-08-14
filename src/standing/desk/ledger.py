@@ -33,11 +33,76 @@ SNAPSHOT_SCORE_FIELDS = (
     "neg_share",
     "social_badge",
     "value_coverage",
+    "value_pe_rung",
     "value_ev_rung",
+    "value_metric_set",
+    "quality_coverage",
+    "momentum_coverage",
+    "pe_ttm",
+    "pe_forward",
+    "pb",
+    "ptbv",
+    "ps_ttm",
+    "ev_ebitda",
+    "ev_ebit",
+    "ev_sales",
+    "roe",
+    "operating_margin",
+    "revenue_growth_yoy",
+)
+
+FUNDAMENTAL_FIELDS = (
+    "last_price",
+    "final_standing",
+    "value",
+    "quality",
+    "momentum",
+    "pe_ttm",
+    "pe_forward",
+    "pb",
+    "ptbv",
+    "ps_ttm",
+    "ev_ebitda",
+    "ev_ebit",
+    "ev_sales",
+    "roe",
+    "operating_margin",
+    "revenue_growth_yoy",
+    "value_coverage",
+    "quality_coverage",
+    "momentum_coverage",
+    "value_pe_rung",
+    "value_ev_rung",
+    "value_metric_set",
+)
+
+# German desk labels for present-only fundamental facts (never invented).
+FUNDAMENTAL_DISPLAY = (
+    ("last_price", "Aktueller Kurs", "px"),
+    ("final_standing", "Final", "n1"),
+    ("value", "Value", "n1"),
+    ("quality", "Quality", "n1"),
+    ("momentum", "Momentum", "n1"),
+    ("pe_ttm", "KGV (TTM)", "n1"),
+    ("pe_forward", "KGV (fwd)", "n1"),
+    ("pb", "KBV", "n2"),
+    ("ptbv", "KBV (tangible)", "n2"),
+    ("ps_ttm", "KUV", "n2"),
+    ("ev_ebitda", "EV/EBITDA", "n1"),
+    ("ev_ebit", "EV/EBIT", "n1"),
+    ("ev_sales", "EV/Umsatz", "n1"),
+    ("roe", "ROE", "pct"),
+    ("operating_margin", "Op. Marge", "pct"),
+    ("revenue_growth_yoy", "Umsatzwachstum", "pct"),
+    ("value_coverage", "Value-Coverage", "n2"),
+    ("quality_coverage", "Quality-Coverage", "n2"),
+    ("value_pe_rung", "PE-Rung", "str"),
+    ("value_ev_rung", "EV-Rung", "str"),
+    ("value_metric_set", "Metrik-Set", "str"),
 )
 
 DIARY_KINDS = frozenset(
-    {"observation", "buy", "add", "close", "thesis_update", "note"}
+    {"observation", "buy", "add", "close", "thesis_update", "note", "entwurf"}
 )
 
 
@@ -75,6 +140,16 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
+def new_id(prefix: str = "D") -> str:
+    return _new_id(prefix)
+
+
+def attachments_dir(root: Path | None = None) -> Path:
+    path = ensure_desk(root) / "attachments"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=path.name, suffix=".tmp", dir=path.parent)
@@ -101,6 +176,62 @@ def _finite(value: Any) -> float | None:
     if number != number:  # NaN
         return None
     return number
+
+
+def extract_fundamentals(row: dict[str, Any] | None) -> dict[str, Any]:
+    """Copy present desk fundamentals only — never invent missing multiples."""
+    src = row or {}
+    if isinstance(src.get("scores"), dict) and not any(k in src for k in FUNDAMENTAL_FIELDS):
+        src = src["scores"]
+    out: dict[str, Any] = {}
+    for field in FUNDAMENTAL_FIELDS:
+        if field not in src:
+            continue
+        value = src.get(field)
+        if value is None or value == "":
+            continue
+        if field in {"value_pe_rung", "value_ev_rung", "value_metric_set"}:
+            text = str(value).strip()
+            if text and text.lower() != "nan":
+                out[field] = text
+            continue
+        number = _finite(value)
+        if number is not None:
+            out[field] = number
+    return out
+
+
+def _fmt_fundamental(value: Any, kind: str) -> str:
+    if kind == "str":
+        return str(value)
+    number = _finite(value)
+    if number is None:
+        return "—"
+    if kind == "px":
+        return f"{number:,.2f}"
+    if kind == "pct":
+        return f"{number * 100:.1f}%"
+    digits = 2 if kind == "n2" else 1
+    return f"{number:.{digits}f}"
+
+
+def fundamentals_display(row: dict[str, Any] | None) -> list[list[str]]:
+    funds = extract_fundamentals(row)
+    pairs: list[list[str]] = []
+    value, quality, momentum = funds.get("value"), funds.get("quality"), funds.get("momentum")
+    if value is not None or quality is not None or momentum is not None:
+        pairs.append(
+            [
+                "V / Q / M",
+                f"{_fmt_fundamental(value, 'n1')} / {_fmt_fundamental(quality, 'n1')} / {_fmt_fundamental(momentum, 'n1')}",
+            ]
+        )
+    skip = {"value", "quality", "momentum"}
+    for field, label, kind in FUNDAMENTAL_DISPLAY:
+        if field in skip or field not in funds:
+            continue
+        pairs.append([label, _fmt_fundamental(funds[field], kind)])
+    return pairs
 
 
 def capture_snapshot(
@@ -211,6 +342,7 @@ def build_diary_marks(
         pnl = _pnl_block({"shares": shares, "avg_cost": avg_cost}, last_price)
     else:
         pnl = None
+    funds = extract_fundamentals(scores or snap)
     return {
         "last_price": last_price,
         "entry_price": entry_price,
@@ -225,6 +357,7 @@ def build_diary_marks(
         "downside_pct": _rel_pct(stop_price, last_price),
         "reward_risk": _reward_risk(entry_price, target_price, stop_price),
         "final_standing": _finite(scores.get("final_standing")),
+        "fundamentals": funds,
     }
 
 
@@ -238,6 +371,8 @@ def append_diary(
     desk_position: dict[str, Any] | None = None,
     book: dict[str, Any] | None = None,
     marks: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
+    entry_id: str | None = None,
     root: Path | None = None,
 ) -> dict[str, Any]:
     if kind not in DIARY_KINDS:
@@ -254,7 +389,7 @@ def append_diary(
         book=book,
     )
     entry = {
-        "id": _new_id("D"),
+        "id": entry_id or _new_id("D"),
         "created_utc": _now_utc(),
         "ticker": ticker_key,
         "kind": kind,
@@ -263,6 +398,10 @@ def append_diary(
         "snapshot": snapshot,
         "marks": frozen,
     }
+    if extra:
+        for key, value in extra.items():
+            if key not in entry:
+                entry[key] = value
     target = ensure_desk(root)
     with _diary_path(target).open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -302,6 +441,9 @@ def read_diary(
                 continue
             if needle:
                 blob = f"{row.get('ticker','')} {row.get('comment','')} {row.get('kind','')}".lower()
+                extra = row.get("entwurf")
+                if extra:
+                    blob += " " + json.dumps(extra, ensure_ascii=False).lower()
                 if needle not in blob:
                     continue
             rows.append(row)

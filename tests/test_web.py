@@ -28,6 +28,7 @@ def test_web_health_and_snapshot():
     assert len(payload["standings"]) > 0
     assert "last_price" in payload["standings"][0]
     assert "value_coverage" in payload["standings"][0]
+    assert "pe_ttm" in payload["standings"][0]
     assert len(payload["heat"]) > 0
 
     ticker = payload["standings"][0]["ticker"]
@@ -243,3 +244,14 @@ def test_web_portfolio_diary_roundtrip(tmp_path, monkeypatch):
     assert b'id="geo"' in trade_page.content
     assert b'id="buy-form"' in trade_page.content
     assert b'id="sell-form"' in trade_page.content
+    assert b"Score einfrieren" in trade_page.content
+    assert b'id="btn-snap"' in trade_page.content
+    assert b'id="snap-card"' in trade_page.content
+    assert b"Entwurf" in trade_page.content
+    assert b"In Kauf-Formular \xc3\xbcbernehmen" in trade_page.content or b"In Kauf-Formular" in trade_page.content
+    assert b'id="entwurf-form"' in trade_page.content
+    assert b'id="btn-entwurf-apply"' in trade_page.content
+    assert b'id="entwurf-card"' in trade_page.content
+    assert b"KGV" in trade_page.content or b"entwickeln" in trade_page.content
+
+    assert b"Entwurf" in diary_page.content

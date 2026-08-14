@@ -771,6 +771,76 @@ a.ghost {
 .quote-card {
   margin: 0 0 1rem;
 }
+.snap-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  margin: 0 0 1rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.snap-card.is-frozen {
+  border-color: rgba(31, 111, 91, 0.45);
+}
+.snap-card.is-stale {
+  border-color: rgba(196, 92, 38, 0.45);
+}
+.snap-card .facts {
+  margin: 0;
+}
+.snap-card #snap-empty {
+  margin: 0;
+}
+.snap-card #snap-meta {
+  margin: 0.55rem 0 0;
+}
+.entwurf-form {
+  margin: 0 0 0.75rem;
+}
+.entwurf-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.entwurf-card textarea {
+  font: inherit;
+  text-transform: none;
+  letter-spacing: 0;
+  color: inherit;
+  min-height: 3.4rem;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  background: transparent;
+}
+.entwurf-card .primary,
+.entwurf-card .ghost {
+  margin-top: 0.75rem;
+}
+.entwurf-card.is-ready {
+  border-color: rgba(31, 111, 91, 0.35);
+}
+.entwurf-figure {
+  margin: 0.55rem 0 0;
+}
+.entwurf-figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 12rem;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.entwurf-card #entwurf-fundamentals {
+  margin: 0.55rem 0 0;
+}
+.badge.entwurf { background: rgba(31, 111, 91, 0.12); }
 .trade-geo {
   margin: 0 0 1rem;
 }

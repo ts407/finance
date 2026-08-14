@@ -20,6 +20,20 @@ from standing.domain.scoring.social_features import (
 )
 from standing.domain.scoring.tilt import attention_tilt, final_standing
 
+FUNDAMENTAL_PASSTHROUGH = (
+    "pe_ttm",
+    "pe_forward",
+    "pb",
+    "ptbv",
+    "ps_ttm",
+    "ev_ebitda",
+    "ev_ebit",
+    "ev_sales",
+    "roe",
+    "operating_margin",
+    "revenue_growth_yoy",
+)
+
 
 @dataclass(frozen=True)
 class ScoreInputs:
@@ -151,44 +165,47 @@ def score_cross_section(inputs: ScoreInputs, cfg: ScoringConfig) -> pd.DataFrame
     rows: list[dict[str, Any]] = []
     for i, t in enumerate(tickers):
         last_price = _cell_float(market.iloc[i][price_col]) if price_col else float("nan")
-        rows.append(
-            {
-                "ticker": t,
-                "sector": market.iloc[i]["sector"],
-                "last_price": last_price,
-                "value": float(pillars.iloc[i]["value"]),
-                "quality": float(pillars.iloc[i]["quality"]),
-                "momentum": float(pillars.iloc[i]["momentum"]),
-                "momentum_global": float(pillars.iloc[i]["momentum_global"]),
-                "composite_standing": float(base.iloc[i]),
-                "size_bucket": _cell_str(pillars.iloc[i].get("size_bucket", "")),
-                "peer_group": _cell_str(pillars.iloc[i].get("peer_group", "")),
-                "value_n_metrics": int(pillars.iloc[i].get("value_n_metrics", 0)),
-                "value_coverage": float(pillars.iloc[i].get("value_coverage", np.nan)),
-                "value_confidence": float(pillars.iloc[i].get("value_confidence", np.nan)),
-                "value_pe_rung": _cell_str(pillars.iloc[i].get("value_pe_rung", "")),
-                "value_ev_rung": _cell_str(pillars.iloc[i].get("value_ev_rung", "")),
-                "value_metric_set": _cell_str(pillars.iloc[i].get("value_metric_set", "")),
-                "quality_n_metrics": int(pillars.iloc[i].get("quality_n_metrics", 0)),
-                "quality_coverage": float(pillars.iloc[i].get("quality_coverage", np.nan)),
-                "momentum_n_metrics": int(pillars.iloc[i].get("momentum_n_metrics", 0)),
-                "momentum_coverage": float(pillars.iloc[i].get("momentum_coverage", np.nan)),
-                "s_obs": float(s_obs[i]),
-                "s_used": float(s_used[i]),
-                "n": float(n[i]),
-                "confidence_c": float(c[i]),
-                "neg_share": float(neg[i]),
-                "attention_tilt": float(tilt[i]),
-                "final_standing": float(final[i]),
-                "sector_low_confidence": bool(low_conf.iloc[i]),
-                "social_badge": _badge(
-                    float(n[i]),
-                    float(badges["sparse_below"]),
-                    float(badges["ok_at"]),
-                ),
-                "score_kind": cfg.score_kind,
-                "methodology_version": cfg.methodology_version,
-                "as_of": inputs.as_of.isoformat(),
-            }
-        )
+        market_row = market.iloc[i]
+        row: dict[str, Any] = {
+            "ticker": t,
+            "sector": market_row["sector"],
+            "last_price": last_price,
+            "value": float(pillars.iloc[i]["value"]),
+            "quality": float(pillars.iloc[i]["quality"]),
+            "momentum": float(pillars.iloc[i]["momentum"]),
+            "momentum_global": float(pillars.iloc[i]["momentum_global"]),
+            "composite_standing": float(base.iloc[i]),
+            "size_bucket": _cell_str(pillars.iloc[i].get("size_bucket", "")),
+            "peer_group": _cell_str(pillars.iloc[i].get("peer_group", "")),
+            "value_n_metrics": int(pillars.iloc[i].get("value_n_metrics", 0)),
+            "value_coverage": float(pillars.iloc[i].get("value_coverage", np.nan)),
+            "value_confidence": float(pillars.iloc[i].get("value_confidence", np.nan)),
+            "value_pe_rung": _cell_str(pillars.iloc[i].get("value_pe_rung", "")),
+            "value_ev_rung": _cell_str(pillars.iloc[i].get("value_ev_rung", "")),
+            "value_metric_set": _cell_str(pillars.iloc[i].get("value_metric_set", "")),
+            "quality_n_metrics": int(pillars.iloc[i].get("quality_n_metrics", 0)),
+            "quality_coverage": float(pillars.iloc[i].get("quality_coverage", np.nan)),
+            "momentum_n_metrics": int(pillars.iloc[i].get("momentum_n_metrics", 0)),
+            "momentum_coverage": float(pillars.iloc[i].get("momentum_coverage", np.nan)),
+            "s_obs": float(s_obs[i]),
+            "s_used": float(s_used[i]),
+            "n": float(n[i]),
+            "confidence_c": float(c[i]),
+            "neg_share": float(neg[i]),
+            "attention_tilt": float(tilt[i]),
+            "final_standing": float(final[i]),
+            "sector_low_confidence": bool(low_conf.iloc[i]),
+            "social_badge": _badge(
+                float(n[i]),
+                float(badges["sparse_below"]),
+                float(badges["ok_at"]),
+            ),
+            "score_kind": cfg.score_kind,
+            "methodology_version": cfg.methodology_version,
+            "as_of": inputs.as_of.isoformat(),
+        }
+        for col in FUNDAMENTAL_PASSTHROUGH:
+            if col in market.columns:
+                row[col] = _cell_float(market_row[col])
+        rows.append(row)
     return pd.DataFrame(rows)

@@ -78,6 +78,7 @@ def test_fixture_snapshot_runs():
         snap.standings.columns
     )
     assert "value_coverage" in snap.standings.columns
+    assert "pe_ttm" in snap.standings.columns
     assert "size_bucket" in snap.standings.columns
     assert snap.meta["social_is_fixture"] is True
     assert snap.meta["universe_as_of"]
